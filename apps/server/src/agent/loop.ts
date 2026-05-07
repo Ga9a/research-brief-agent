@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createChatCompletion, type DeepSeekMessage } from "./deepseek.js";
 import { ArtifactStore } from "./artifactStore.js";
 import { ContextBudgetManager, type CompactContext } from "./contextBudget.js";
+import { createAgentHookRunner, ensureHookCanContinue, type AgentHookRunner, type AgentRunHooks } from "./hooks.js";
 import { loadSkillToolDefinition, runLoadSkill, validateLoadSkillArgs } from "./loadSkillTool.js";
 import { runTaskTool } from "./taskRunner.js";
 import {
@@ -12,7 +13,6 @@ import {
   type TaskToolArgs
 } from "./taskTool.js";
 import type {
-  AgentStreamEvent,
   ChatResponse,
   ReasoningSummary,
   ResearchBrief,
@@ -39,10 +39,6 @@ interface SessionState {
   artifactStore: ArtifactStore;
   contextBudget: ContextBudgetManager;
   researchMemory: SessionResearchMemory;
-}
-
-interface AgentRunHooks {
-  onEvent?: (event: AgentStreamEvent) => void;
 }
 
 interface SessionResearchMemory {
@@ -87,6 +83,7 @@ export async function runAgentTurn(
   input: { sessionId?: string; message: string },
   hooks: AgentRunHooks = {}
 ): Promise<ChatResponse> {
+  const hookRunner = createAgentHookRunner(hooks);
   const sessionId = input.sessionId || randomUUID();
   const state = getSession(sessionId);
   const userContent = input.message.trim();
@@ -94,7 +91,7 @@ export async function runAgentTurn(
     throw new Error("消息不能为空。");
   }
 
-  hooks.onEvent?.({ type: "session", sessionId });
+  ensureHookCanContinue(await hookRunner.sessionStarted({ sessionId }));
 
   if (isManualCompactCommand(userContent)) {
     state.uiMessages.push({
@@ -105,7 +102,7 @@ export async function runAgentTurn(
     });
     state.modelMessages = state.contextBudget.forceSummaryCompact(state.modelMessages, buildCompactContext(state, getLatestUserGoal(state)));
     appendFinalAssistantMessage(state, "已完成上下文压缩。旧工具输出没有删除，仍可通过摘要中的 persisted-output 路径追踪。", []);
-    return buildResponse(sessionId, state, hooks);
+    return await finalizeResponse(sessionId, state, hookRunner);
   }
 
   state.uiMessages.push({
@@ -143,7 +140,7 @@ export async function runAgentTurn(
       const fallback = buildFallbackFinal(turnEvents, `模型调用失败或超时：${formatError(error)}`);
       if (fallback) {
         appendFinalAssistantMessage(state, fallback, turnEvents, researchPlan);
-        return buildResponse(sessionId, state, hooks);
+        return await finalizeResponse(sessionId, state, hookRunner);
       }
 
       throw error;
@@ -154,7 +151,7 @@ export async function runAgentTurn(
 
     if (toolCalls.length === 0) {
       appendFinalAssistantMessage(state, normalizeAssistantContent(assistantMessage.content, turnEvents), turnEvents, researchPlan);
-      return buildResponse(sessionId, state, hooks);
+      return await finalizeResponse(sessionId, state, hookRunner);
     }
 
     for (const toolCall of toolCalls) {
@@ -185,12 +182,11 @@ export async function runAgentTurn(
             taskArgs.taskType,
             taskArgs,
             `已跳过重复调用：本轮调研已经用相同参数执行过该步骤。`,
-            hooks
           );
         } else {
           const preconditionError = validateTaskPolicy(taskArgs, turnEvents);
           if (preconditionError) {
-            researchEvent = createFailedResearchEvent(taskArgs.taskType, taskArgs, preconditionError, hooks);
+            researchEvent = createFailedResearchEvent(taskArgs.taskType, taskArgs, preconditionError);
           } else {
             researchEvent = await executeResearchStep(
               taskArgs,
@@ -200,8 +196,7 @@ export async function runAgentTurn(
               turnId,
               researchPlan,
               getLatestCoverageFeedback(turnEvents),
-              executedToolCalls,
-              hooks
+              executedToolCalls
             );
           }
         }
@@ -210,10 +205,10 @@ export async function runAgentTurn(
           inferTaskType(parsedArgs) || toolName,
           parsedArgs,
           formatToolArgumentError(error),
-          hooks
         );
       }
 
+      ensureHookCanContinue(await hookRunner.researchEventCreated({ researchEvent }));
       turnEvents.push(researchEvent);
       state.researchEvents.push(researchEvent);
       state.modelMessages.push({
@@ -244,7 +239,7 @@ export async function runAgentTurn(
           turnEvents,
           researchPlan
         );
-        return buildResponse(sessionId, state, hooks);
+        return await finalizeResponse(sessionId, state, hookRunner);
       }
     }
   }
@@ -256,7 +251,7 @@ export async function runAgentTurn(
     turnEvents,
     researchPlan
   );
-  return buildResponse(sessionId, state, hooks);
+  return await finalizeResponse(sessionId, state, hookRunner);
 }
 
 function getSession(sessionId: string): SessionState {
@@ -527,8 +522,7 @@ async function executeResearchStep(
   turnId: string,
   researchPlan: ResearchPlan,
   coverageFeedback: CoverageReport | undefined,
-  executedToolCalls: Set<string>,
-  hooks: AgentRunHooks
+  executedToolCalls: Set<string>
 ): Promise<ResearchToolEvent> {
   executedToolCalls.add(callKey);
   const startedAt = new Date().toISOString();
@@ -545,10 +539,9 @@ async function executeResearchStep(
       startedAt,
       finishedAt: new Date().toISOString()
     };
-    hooks.onEvent?.({ type: "research_event", researchEvent });
     return researchEvent;
   } catch (error) {
-    return createFailedResearchEvent(taskArgs.taskType, taskArgs, formatError(error), hooks, startedAt);
+    return createFailedResearchEvent(taskArgs.taskType, taskArgs, formatError(error), startedAt);
   }
 }
 
@@ -556,7 +549,6 @@ function createFailedResearchEvent(
   toolName: string,
   args: unknown,
   error: string,
-  hooks: AgentRunHooks,
   startedAt = new Date().toISOString()
 ): ResearchToolEvent {
   const researchEvent: ResearchToolEvent = {
@@ -569,7 +561,6 @@ function createFailedResearchEvent(
     startedAt,
     finishedAt: new Date().toISOString()
   };
-  hooks.onEvent?.({ type: "research_event", researchEvent });
   return researchEvent;
 }
 
@@ -827,15 +818,19 @@ function parseJson<T>(output: string | undefined): T | undefined {
   }
 }
 
-function buildResponse(sessionId: string, state: SessionState, hooks?: AgentRunHooks): ChatResponse {
-  const response = {
+async function finalizeResponse(sessionId: string, state: SessionState, hookRunner: AgentHookRunner): Promise<ChatResponse> {
+  const response = buildResponse(sessionId, state);
+  ensureHookCanContinue(await hookRunner.finalResponseCreated({ response }));
+  return response;
+}
+
+function buildResponse(sessionId: string, state: SessionState): ChatResponse {
+  return {
     sessionId,
     messages: state.uiMessages,
     researchEvents: state.researchEvents,
     compactState: state.contextBudget.getState()
   };
-  hooks?.onEvent?.({ type: "final", response });
-  return response;
 }
 
 function buildCompactContext(
