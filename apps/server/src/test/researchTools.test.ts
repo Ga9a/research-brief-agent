@@ -138,7 +138,15 @@ describe("source_collector 真实资料采集工具", () => {
       recency: "balanced"
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": "research-brief-agent/0.1 arxiv-client"
+        }),
+        signal: expect.any(AbortSignal)
+      })
+    );
     expect(sources).toHaveLength(1);
     expect(sources[0]).toMatchObject({
       title: "Retrieval Augmented Generation Evaluation",
@@ -255,6 +263,72 @@ describe("source_collector 真实资料采集工具", () => {
         recency: "balanced"
       })
     ).rejects.toThrow(/SEMANTIC_SCHOLAR_API_KEY/);
+  });
+
+  it("arXiv 429 returns a clear rate-limit error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Rate exceeded.", { status: 429 })));
+
+    await expect(
+      collectPaperSources({
+        topic: "RAG evaluation",
+        sourceTypes: ["papers"],
+        maxResults: 2,
+        recency: "balanced"
+      })
+    ).rejects.toThrow(/arXiv rate limit exceeded.*Rate exceeded/);
+  });
+
+  it("falls back to Crossref when arXiv is rate-limited", async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      if (String(url).includes("export.arxiv.org")) {
+        return new Response("Rate exceeded.", { status: 429 });
+      }
+
+      return jsonResponse(crossrefJson());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sources = await collectPaperSources({
+      topic: "RAG evaluation",
+      sourceTypes: ["papers"],
+      maxResults: 2,
+      recency: "balanced"
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("api.crossref.org/works");
+    expect(fetchMock.mock.calls[1][1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": "research-brief-agent/0.1 crossref-client"
+        })
+      })
+    );
+    expect(sources[0]).toMatchObject({
+      title: "Retrieval Augmented Generation Evaluation with Crossref",
+      sourceType: "papers",
+      publisher: "Journal of RAG Systems",
+      publishedAt: "2024-01-02",
+      summary: "Crossref fallback metadata for RAG evaluation.",
+      credibilityScore: 0.75
+    });
+  });
+
+  it("uses Crossref directly when PAPER_PROVIDER is crossref", async () => {
+    process.env.PAPER_PROVIDER = "crossref";
+    const fetchMock = vi.fn(async () => jsonResponse(crossrefJson()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sources = await collectPaperSources({
+      topic: "RAG evaluation",
+      sourceTypes: ["papers"],
+      maxResults: 2,
+      recency: "balanced"
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sources).toHaveLength(1);
+    expect(sources[0].url).toBe("https://doi.org/10.5555/rag.eval");
   });
 
   it("relevanceScore 能按主题命中词计算", () => {
@@ -435,6 +509,25 @@ function arxivXml(): string {
     </summary>
   </entry>
 </feed>`;
+}
+
+function crossrefJson() {
+  return {
+    message: {
+      items: [
+        {
+          DOI: "10.5555/rag.eval",
+          title: ["Retrieval Augmented Generation Evaluation with Crossref"],
+          abstract: "<jats:p>Crossref fallback metadata for RAG evaluation.</jats:p>",
+          publisher: "Journal of RAG Systems",
+          URL: "https://doi.org/10.5555/rag.eval",
+          "published-online": {
+            "date-parts": [[2024, 1, 2]]
+          }
+        }
+      ]
+    }
+  };
 }
 
 function restoreSearchEnv(): void {

@@ -543,53 +543,7 @@ input {
   background: #ffffff;
 }
 
-.context-metric-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.context-metric {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid #d9e1ec;
-  border-radius: 8px;
-  background: #f8fafc;
-}
-
-.context-metric-icon {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: #eef2f7;
-  color: #175cd3;
-}
-
-.context-metric span,
-.context-metric small {
-  display: block;
-  color: #667085;
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.context-metric strong {
-  display: block;
-  margin: 2px 0;
-  color: #1d2433;
-  font-size: 14px;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
 .context-budget {
-  margin-top: 12px;
   padding: 10px;
   border: 1px solid #d9e1ec;
   border-radius: 8px;
@@ -603,11 +557,6 @@ input {
   gap: 10px;
   color: #1d2433;
   font-size: 12px;
-}
-
-.context-budget-row.subtle {
-  margin-top: 7px;
-  color: #667085;
 }
 
 .context-bar {
@@ -627,78 +576,20 @@ input {
   background: #175cd3;
 }
 
-.context-details {
-  margin-top: 10px;
-  border: 1px solid #d9e1ec;
-  border-radius: 8px;
-  background: #f8fafc;
-}
-
-.context-details summary {
-  padding: 9px 10px;
-  color: #1d2433;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.context-details pre {
-  max-height: 220px;
-  margin: 0;
-  padding: 0 10px 10px;
-  overflow: auto;
-  color: #4b5563;
-  font-size: 11px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.context-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.context-hint code,
-.persisted-card code {
-  padding: 2px 5px;
-  border-radius: 5px;
-  background: #eef2f7;
-  color: #1d2433;
-  font-size: 0.9em;
-}
-
-.persisted-card {
-  display: grid;
-  gap: 8px;
-  padding: 0 10px 10px;
-}
-
-.persisted-card > div {
+.context-pill-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 12px;
   color: #667085;
-  font-size: 12px;
 }
 
-.persisted-card strong {
-  color: #1d2433;
-}
-
-.persisted-card code {
-  overflow-wrap: anywhere;
-}
-
-.persisted-card p {
-  max-height: 120px;
-  margin: 0;
-  overflow: auto;
-  color: #4b5563;
-  font-size: 12px;
-  line-height: 1.5;
+.context-pill-row span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #eef2f7;
 }
 
 .source-list {

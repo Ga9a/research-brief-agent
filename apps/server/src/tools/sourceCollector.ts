@@ -14,7 +14,9 @@ export const sourceCollectorArgsSchema = z.object({
 
 export type SourceCollectorArgs = z.infer<typeof sourceCollectorArgsSchema>;
 type SearchProvider = "tavily" | "serpapi" | "bing";
-type PaperProvider = "arxiv" | "semantic_scholar";
+type PaperProvider = "arxiv" | "semantic_scholar" | "crossref";
+const ARXIV_USER_AGENT = "research-brief-agent/0.1 arxiv-client";
+const CROSSREF_USER_AGENT = "research-brief-agent/0.1 crossref-client";
 
 interface TavilyResult {
   title?: unknown;
@@ -59,6 +61,29 @@ interface ArxivEntry {
 interface ArxivFeed {
   feed?: {
     entry?: ArxivEntry | ArxivEntry[];
+  };
+}
+
+interface CrossrefDateParts {
+  "date-parts"?: unknown;
+}
+
+interface CrossrefWork {
+  DOI?: unknown;
+  URL?: unknown;
+  title?: unknown;
+  abstract?: unknown;
+  publisher?: unknown;
+  "container-title"?: unknown;
+  issued?: CrossrefDateParts;
+  published?: CrossrefDateParts;
+  "published-print"?: CrossrefDateParts;
+  "published-online"?: CrossrefDateParts;
+}
+
+interface CrossrefResponse {
+  message?: {
+    items?: CrossrefWork[];
   };
 }
 
@@ -168,6 +193,24 @@ export async function collectWebSources(args: SourceCollectorArgs): Promise<Rese
 
 export async function collectPaperSources(args: SourceCollectorArgs): Promise<ResearchSource[]> {
   const provider = getPaperProvider();
+  try {
+    return await collectConfiguredPaperSources(args, provider);
+  } catch (error) {
+    if (provider === "crossref" || !shouldFallbackToCrossref(error)) {
+      throw error;
+    }
+
+    try {
+      return await collectCrossrefSources(args);
+    } catch (fallbackError) {
+      throw new Error(
+        `Paper source collection failed: ${formatError(error)}; Crossref fallback failed: ${formatError(fallbackError)}`
+      );
+    }
+  }
+}
+
+async function collectConfiguredPaperSources(args: SourceCollectorArgs, provider: PaperProvider): Promise<ResearchSource[]> {
   if (provider === "arxiv") {
     return await collectArxivSources(args);
   }
@@ -176,7 +219,7 @@ export async function collectPaperSources(args: SourceCollectorArgs): Promise<Re
     return await collectSemanticScholarSources(args);
   }
 
-  throw new Error(`Unsupported PAPER_PROVIDER: ${provider}`);
+  return await collectCrossrefSources(args);
 }
 
 async function collectArxivSources(args: SourceCollectorArgs): Promise<ResearchSource[]> {
@@ -187,7 +230,15 @@ async function collectArxivSources(args: SourceCollectorArgs): Promise<ResearchS
   url.searchParams.set("sortBy", args.recency === "recent" ? "submittedDate" : "relevance");
   url.searchParams.set("sortOrder", "descending");
 
-  const xml = await fetchText(url, undefined, "arXiv");
+  const xml = await fetchText(
+    url,
+    {
+      headers: {
+        "User-Agent": ARXIV_USER_AGENT
+      }
+    },
+    "arXiv"
+  );
   const feed = parseArxivFeed(xml);
   const entries = Array.isArray(feed.feed?.entry) ? feed.feed.entry : feed.feed?.entry ? [feed.feed.entry] : [];
 
@@ -211,6 +262,36 @@ async function collectSemanticScholarSources(args: SourceCollectorArgs): Promise
   return data.data
     .map((paper) => mapSemanticScholarPaper(args.topic, paper))
     .filter((source): source is ResearchSource => Boolean(source));
+}
+
+async function collectCrossrefSources(args: SourceCollectorArgs): Promise<ResearchSource[]> {
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("query", buildRecencyAwareQuery(args.topic, args.recency));
+  url.searchParams.set("rows", String(args.maxResults));
+  url.searchParams.set("sort", args.recency === "recent" ? "published" : "score");
+  url.searchParams.set("order", "desc");
+
+  const mailto = getEnvValue("CROSSREF_MAILTO");
+  if (mailto) {
+    url.searchParams.set("mailto", mailto);
+  }
+
+  const data = await fetchJson<CrossrefResponse>(
+    url,
+    {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": CROSSREF_USER_AGENT
+      }
+    },
+    "Crossref"
+  );
+
+  if (!data?.message || !Array.isArray(data.message.items)) {
+    throw new Error("Invalid response format: Crossref");
+  }
+
+  return data.message.items.map((work) => mapCrossrefWork(args.topic, work)).filter(isResearchSource);
 }
 
 export function scoreRelevance(topic: string, title: string, summary: string): number {
@@ -441,6 +522,34 @@ function mapSemanticScholarPaper(topic: string, paper: SemanticScholarPaper): Re
   };
 }
 
+function mapCrossrefWork(topic: string, work: CrossrefWork): ResearchSource | undefined {
+  const title = normalizeWhitespace(getFirstString(work.title) || "");
+  const doi = getString(work.DOI);
+  const url = getString(work.URL) || (doi ? `https://doi.org/${doi}` : undefined);
+  const publisher = getString(work.publisher) || getFirstString(work["container-title"]) || "Crossref";
+  const abstract = normalizeCrossrefAbstract(getString(work.abstract));
+  const summary = abstract || `Crossref metadata record from ${publisher}.`;
+  const publishedAt = formatCrossrefDate(
+    work["published-online"] || work["published-print"] || work.published || work.issued
+  );
+
+  if (!title || !url) {
+    return undefined;
+  }
+
+  return {
+    id: createSourceId("papers", url),
+    title,
+    url,
+    sourceType: "papers",
+    publisher,
+    publishedAt,
+    summary: truncate(summary, 300),
+    relevanceScore: scoreRelevance(topic, title, summary),
+    credibilityScore: Math.max(scoreCredibility(url, publisher), 0.75)
+  };
+}
+
 function mapArxivEntry(topic: string, entry: ArxivEntry): ResearchSource | undefined {
   const title = normalizeWhitespace(getString(entry.title) || "");
   const url = getString(entry.id);
@@ -476,7 +585,7 @@ function getSearchProvider(): SearchProvider {
 
 function getPaperProvider(): PaperProvider {
   const provider = (getEnvValue("PAPER_PROVIDER") || "arxiv").toLowerCase();
-  if (provider === "arxiv" || provider === "semantic_scholar") {
+  if (provider === "arxiv" || provider === "semantic_scholar" || provider === "crossref") {
     return provider;
   }
 
@@ -509,6 +618,15 @@ function buildSemanticScholarHeaders(): HeadersInit {
   }
 
   return headers;
+}
+
+function shouldFallbackToCrossref(error: unknown): boolean {
+  const message = formatError(error);
+  return /External API request failed|timed out|fetch failed|rate limit exceeded|Rate exceeded|Invalid response format/i.test(message);
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function getEnvValue(name: string): string | undefined {
@@ -565,6 +683,38 @@ function getDomain(url: string): string {
 
 function getString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function getFirstString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return getString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(getString).find(Boolean);
+  }
+
+  return undefined;
+}
+
+function normalizeCrossrefAbstract(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return normalizeWhitespace(value.replace(/<[^>]+>/g, " "));
+}
+
+function formatCrossrefDate(value: CrossrefDateParts | undefined): string | null {
+  const firstDate = Array.isArray(value?.["date-parts"]) ? value?.["date-parts"][0] : undefined;
+  if (!Array.isArray(firstDate) || firstDate.length === 0) {
+    return null;
+  }
+
+  return firstDate
+    .filter((part): part is number => typeof part === "number")
+    .map((part, index) => (index === 0 ? String(part) : String(part).padStart(2, "0")))
+    .join("-");
 }
 
 function normalizeWhitespace(value: string): string {

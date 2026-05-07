@@ -1,20 +1,16 @@
 import {
-  Archive,
   BookOpen,
   Brain,
   CheckCircle2,
   ChevronDown,
   Circle,
-  Database,
   ExternalLink,
   FileText,
   Gauge,
-  HardDrive,
   Loader2,
   Send
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -105,7 +101,7 @@ export function App() {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [researchEvents, setResearchEvents] = useState<ResearchToolEvent[]>([]);
   const [currentTurnEvents, setCurrentTurnEvents] = useState<ResearchToolEvent[]>([]);
-  const [input, setInput] = useState("帮我研究 RAG 评估方法，整理成我能和组长讨论的版本。");
+  const [input, setInput] = useState("帮我研究 长上下文记忆框架选型");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
@@ -276,7 +272,7 @@ export function App() {
           <h2>上下文窗口</h2>
         </div>
 
-        <ContextWindowStats compactState={compactState} isLoading={isLoading} />
+        <ContextWindowStats compactState={compactState} />
 
         <div className="process-panel-subheader">
           <BookOpen size={18} />
@@ -313,105 +309,34 @@ export function App() {
   );
 }
 
-function ContextWindowStats({ compactState, isLoading }: { compactState: CompactState | undefined; isLoading: boolean }) {
+function ContextWindowStats({ compactState }: { compactState: CompactState | undefined }) {
   const windowTokens = compactState?.contextWindowTokens || 64000;
   const triggerTokens = compactState?.summaryTriggerTokens || Math.floor(windowTokens * 0.75);
   const estimatedTokens = compactState?.estimatedTokens || 0;
   const windowRatio = Math.min(1, estimatedTokens / windowTokens);
   const triggerRatio = Math.min(1, estimatedTokens / triggerTokens);
   const persistedCount = compactState?.persistedOutputs.length || 0;
-  const persistedBytes = compactState?.persistedOutputs.reduce((total, item) => total + item.bytes, 0) || 0;
-  const latestPersisted = compactState?.persistedOutputs.at(-1);
 
   return (
     <section className="context-section" aria-label="上下文窗口统计">
-      <div className="context-metric-grid">
-        <ContextMetric
-          icon={<Gauge size={16} />}
-          label="估算上下文"
-          value={`${formatNumber(estimatedTokens)} tokens`}
-          detail={`窗口 ${formatNumber(windowTokens)}`}
-        />
-        <ContextMetric
-          icon={<Archive size={16} />}
-          label="压缩次数"
-          value={String(compactState?.compactedMessageCount || 0)}
-          detail={compactState?.hasCompacted ? "已触发" : isLoading ? "监控中" : "未触发"}
-        />
-        <ContextMetric
-          icon={<HardDrive size={16} />}
-          label="持久化输出"
-          value={`${persistedCount} 个`}
-          detail={formatBytes(persistedBytes)}
-        />
-        <ContextMetric
-          icon={<Database size={16} />}
-          label="最近文件"
-          value={`${compactState?.recentFiles.length || 0} 个`}
-          detail="可追踪恢复"
-        />
-      </div>
-
       <div className="context-budget">
         <div className="context-budget-row">
-          <span>窗口占用</span>
-          <strong>{Math.round(windowRatio * 100)}%</strong>
+          <span>使用量</span>
+          <strong>
+            {formatNumber(estimatedTokens)} / {formatNumber(windowTokens)}
+          </strong>
         </div>
         <div className="context-bar" aria-label="上下文窗口占用">
           <span style={{ width: `${Math.round(windowRatio * 100)}%` }} />
         </div>
-        <div className="context-budget-row subtle">
-          <span>summary compact 触发线</span>
-          <span>{formatNumber(triggerTokens)} tokens · 当前为触发线 {Math.round(triggerRatio * 100)}%</span>
+        <div className="context-pill-row">
+          <span>{Math.round(windowRatio * 100)}%</span>
+          <span>触发 {Math.round(triggerRatio * 100)}%</span>
+          <span>压缩 {compactState?.compactedMessageCount || 0}</span>
+          <span>输出 {persistedCount}</span>
         </div>
       </div>
-
-      {compactState?.lastSummary ? (
-        <details className="context-details">
-          <summary>查看最近压缩摘要</summary>
-          <pre>{compactState.lastSummary}</pre>
-        </details>
-      ) : (
-        <p className="muted context-hint">暂无 summary compact。发送 <code>/compact</code> 可以手动触发一次摘要压缩。</p>
-      )}
-
-      {latestPersisted ? (
-        <details className="context-details">
-          <summary>最近持久化输出</summary>
-          <div className="persisted-card">
-            <div>
-              <strong>{latestPersisted.toolName}</strong>
-              <span>{latestPersisted.reason === "size-threshold" ? "超过阈值" : "micro compact"}</span>
-            </div>
-            <code>{latestPersisted.relativePath}</code>
-            <p>{latestPersisted.preview}</p>
-          </div>
-        </details>
-      ) : null}
     </section>
-  );
-}
-
-function ContextMetric({
-  icon,
-  label,
-  value,
-  detail
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="context-metric">
-      <div className="context-metric-icon">{icon}</div>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{detail}</small>
-      </div>
-    </div>
   );
 }
 
@@ -780,15 +705,4 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 0
   }).format(value);
-}
-
-function formatBytes(value: number) {
-  if (value <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB"];
-  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-  const amount = value / 1024 ** exponent;
-  return `${amount.toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
