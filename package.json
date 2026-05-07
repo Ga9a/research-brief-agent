@@ -1,0 +1,21 @@
+{
+  "name": "research-brief-agent",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm --workspace @research-brief-agent/server run dev",
+    "dev:web": "npm --workspace @research-brief-agent/web run dev",
+    "build": "npm --workspaces run build",
+    "test": "npm --workspace @research-brief-agent/server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
