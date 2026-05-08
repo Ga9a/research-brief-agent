@@ -21,7 +21,7 @@ const RAG_EVALUATION_ASPECTS = [
 const MEMORY_FRAMEWORK_ASPECTS = [
   "研究问题和决策场景",
   "记忆模型和核心概念",
-  "主流记忆框架对比",
+  "主流记忆框架对比（Mem0、Letta/MemGPT、Zep、LangGraph Memory、CrewAI Memory、自研轻量记忆层）",
   "评估指标和基准方法",
   "实验设计和数据需求",
   "风险、成本和运维限制"
@@ -39,13 +39,15 @@ export function buildResearchPlan(userGoal: string): ResearchPlan {
       requiredAspects: MEMORY_FRAMEWORK_ASPECTS,
       optionalAspects: ["代表性开源项目", "个性化效果", "长期记忆治理", "隐私和权限控制"],
       searchQueries: [
+        "MemGPT LangGraph memory Letta Zep Mem0 memory framework comparison",
+        "CrewAI memory agent memory framework comparison",
         "LLM agent memory framework episodic semantic procedural memory",
         "agent memory benchmark memory hit rate personalization evaluation",
-        "MemGPT LangGraph memory Letta Zep Mem0 memory framework comparison",
         "LLM long term memory expiration retrieval latency token cost"
       ],
       successCriteria: [
         "明确是在选框架、设计 memory，还是做 benchmark",
+        "候选框架对比表至少包含 Mem0、Letta/MemGPT、Zep、LangGraph Memory、CrewAI Memory 和自研轻量记忆层",
         "列出可量化评估指标，而不是只给抽象建议",
         "说明需要哪些实验数据和对照组",
         "指出长期记忆的过期、污染、隐私、成本和延迟风险"

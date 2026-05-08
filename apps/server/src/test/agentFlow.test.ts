@@ -297,10 +297,14 @@ describe("调研 Agent 流程", () => {
 
     const synthesizeCalls = mocks.executeRegisteredTool.mock.calls.filter(([name]) => name === "evidence_synthesizer");
     const secondSynthesizeArgs = synthesizeCalls.at(-1)?.[1] as { sources?: unknown[]; focus?: string };
+    const sourceCalls = mocks.executeRegisteredTool.mock.calls.filter(([name]) => name === "source_collector");
+    const secondSourceArgs = sourceCalls.at(-1)?.[1] as { topic?: string };
 
     expect(secondSynthesizeArgs.sources).toEqual(memorySourceOutput.sources);
     expect(JSON.stringify(secondSynthesizeArgs.sources)).not.toContain("RAG Evaluation Methods");
     expect(secondSynthesizeArgs.focus).toBe("帮我研究 AI 记忆框架");
+    expect(secondSourceArgs.topic).toContain("MemGPT");
+    expect(secondSourceArgs.topic).toContain("Mem0");
   });
 
   it("能完成资料收集到简报生成的完整流程", async () => {

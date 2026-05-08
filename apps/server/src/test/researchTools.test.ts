@@ -435,6 +435,12 @@ describe("调研工具注册表和后续工具", () => {
     expect(parsed.synthesis.researchQuestion).toContain("记忆框架");
     expect(parsed.synthesis.researchQuestion).not.toContain("RAG");
     expect(parsed.synthesis.keyFindings.join("\n")).toContain("不能等同于 RAG 评估");
+    expect(parsed.synthesis.comparisons.map((item: { dimension: string }) => item.dimension)).toEqual(
+      expect.arrayContaining(["Mem0", "Letta/MemGPT", "Zep", "LangGraph Memory", "CrewAI Memory", "自研轻量记忆层"])
+    );
+    expect(parsed.synthesis.comparisons.map((item: { notes: string }) => item.notes).join("\n")).toContain(
+      "本轮资料摘要未命中"
+    );
   });
 
   it("brief_writer 能生成自然语言简报", async () => {
@@ -457,6 +463,37 @@ describe("调研工具注册表和后续工具", () => {
 
     expect(parsed.brief.content).toContain("# 面向组长讨论的 RAG 评估方案调研简报");
     expect(parsed.brief.content).toContain("## 关键发现");
+  });
+
+  it("brief_writer 会把 memory 主题的候选框架表写进简报", async () => {
+    const synthesis = JSON.parse(
+      (
+        await runEvidenceSynthesizer({
+          sources: [
+            {
+              ...sampleSource,
+              title: "Memory Frameworks for LLM Agents",
+              summary: "This survey mentions Mem0, Letta, Zep and LangGraph memory for long-term agent memory."
+            }
+          ],
+          focus: "帮我研究 长上下文记忆框架选型",
+          outputFormat: "decision_brief"
+        })
+      ).output
+    ).synthesis;
+
+    const result = await runBriefWriter({
+      synthesis,
+      audience: "self_learning",
+      length: "medium"
+    });
+    const parsed = JSON.parse(result.output);
+
+    expect(parsed.brief.title).toBe("agent/LLM 记忆框架选型调研简报");
+    expect(parsed.brief.content).toContain("## 候选框架对比");
+    expect(parsed.brief.content).toContain("| Mem0 |");
+    expect(parsed.brief.content).toContain("| Letta/MemGPT |");
+    expect(parsed.brief.content).toContain("| LangGraph Memory |");
   });
 
   it("brief_writer 会把过长 focus 收敛成短标题", async () => {

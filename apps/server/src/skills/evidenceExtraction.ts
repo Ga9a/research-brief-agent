@@ -17,7 +17,7 @@ export interface EvidenceExtraction {
   items: EvidenceItem[];
 }
 
-const FRAMEWORKS = ["RAGAS", "TruLens", "ARES", "DeepEval", "LangSmith"];
+const FRAMEWORKS = ["RAGAS", "TruLens", "ARES", "DeepEval", "LangSmith", "MemGPT", "Letta", "LangGraph", "Zep", "Mem0", "CrewAI"];
 const METRICS = [
   "faithfulness",
   "answer relevancy",
@@ -126,6 +126,12 @@ function inferAspectTags(text: string, frameworks: string[], metrics: string[], 
   }
   if (frameworks.length > 0 || /framework|tool|平台|框架/.test(normalized)) {
     tags.push("主流评估框架对比");
+    if (/memory|memgpt|letta|langgraph|zep|mem0|crewai|记忆/.test(normalized)) {
+      tags.push("主流记忆框架对比");
+    }
+  }
+  if (/memory|short-term|long-term|episodic|semantic|procedural|working memory|记忆|长期|短期|语义|事件|程序性/.test(normalized)) {
+    tags.push("记忆模型和核心概念");
   }
   if (/dataset|benchmark|rgb|crud|kilt|natural questions|数据集|基准/.test(normalized)) {
     tags.push("评估数据集和基准测试");
@@ -135,10 +141,14 @@ function inferAspectTags(text: string, frameworks: string[], metrics: string[], 
   }
 
   if (plan) {
-    return tags.filter((tag) => plan.requiredAspects.includes(tag) || plan.optionalAspects.includes(tag));
+    return tags.filter((tag) => isPlannedAspect(tag, plan));
   }
 
   return [...new Set(tags)];
+}
+
+function isPlannedAspect(tag: string, plan: ResearchPlan): boolean {
+  return [...plan.requiredAspects, ...plan.optionalAspects].some((aspect) => aspect === tag || aspect.includes(tag));
 }
 
 function findMatches(text: string, candidates: string[]): string[] {

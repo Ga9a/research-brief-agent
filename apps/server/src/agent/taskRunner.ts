@@ -62,11 +62,11 @@ export async function runTaskTool(args: TaskToolArgs, context: TaskRunContext): 
 }
 
 function buildDefaultToolArgs(args: TaskToolArgs, context: TaskRunContext): Record<string, unknown> | undefined {
-  if (args.taskType === "collect_sources" && context.coverageFeedback?.shouldCollectMore) {
+  if (args.taskType === "collect_sources") {
     return {
-      topic: context.coverageFeedback.suggestedQueries[0] || context.researchPlan.researchGoal,
+      topic: buildCollectionTopic(context),
       sourceTypes: getDefaultSourceTypes(),
-      maxResults: 6,
+      maxResults: context.coverageFeedback?.shouldCollectMore ? 6 : 10,
       recency: "balanced"
     };
   }
@@ -106,6 +106,21 @@ function buildChildInstruction(args: TaskToolArgs, context: TaskRunContext): str
 
 function getDefaultSourceTypes(): Array<"web" | "papers"> {
   return process.env.SEARCH_API_KEY?.trim() ? ["web", "papers"] : ["papers"];
+}
+
+function buildCollectionTopic(context: TaskRunContext): string {
+  const query =
+    context.coverageFeedback?.suggestedQueries[0] ||
+    context.researchPlan.searchQueries.find((item) => /memgpt|mem0|letta|zep|langgraph|crewai|framework/i.test(item)) ||
+    context.researchPlan.searchQueries[0] ||
+    context.researchPlan.researchGoal;
+
+  return truncateToolString(`${context.researchPlan.researchGoal} ${query}`, 200);
+}
+
+function truncateToolString(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
 }
 
 function inferAudience(instruction: string): "self_learning" | "team_lead" | "presentation" | "interview" {

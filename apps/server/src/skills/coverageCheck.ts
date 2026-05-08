@@ -68,6 +68,29 @@ function aspectAppearsCovered(aspect: string, text: string): boolean {
 }
 
 function getGenericAspectKeywords(aspect: string): string[] {
+  if (aspect.includes("记忆模型") || aspect.includes("记忆框架")) {
+    return [
+      "memory",
+      "working memory",
+      "short-term",
+      "long-term",
+      "episodic",
+      "semantic",
+      "procedural",
+      "memgpt",
+      "letta",
+      "mem0",
+      "zep",
+      "langgraph",
+      "记忆",
+      "短期",
+      "长期",
+      "语义",
+      "事件",
+      "程序性",
+      "框架"
+    ];
+  }
   if (aspect.includes("核心概念")) {
     return ["核心概念", "concept", "definition", "overview", "introduction", "概念", "定义", "边界"];
   }
@@ -85,9 +108,6 @@ function getGenericAspectKeywords(aspect: string): string[] {
   }
   if (aspect.includes("研究问题") || aspect.includes("决策场景")) {
     return ["research question", "decision", "selection", "design", "benchmark", "研究问题", "决策", "选型", "设计"];
-  }
-  if (aspect.includes("记忆模型") || aspect.includes("记忆框架")) {
-    return ["memory", "episodic", "semantic", "procedural", "short-term", "long-term", "记忆", "长期", "语义", "事件"];
   }
   if (aspect.includes("评估指标") || aspect.includes("基准方法")) {
     return ["metric", "benchmark", "hit rate", "latency", "cost", "personalization", "评估", "指标", "基准", "命中率", "延迟", "成本", "个性化"];

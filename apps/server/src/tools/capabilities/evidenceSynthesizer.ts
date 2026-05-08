@@ -19,6 +19,59 @@ const evidenceSynthesizerSchema = z.object({
 
 type EvidenceSynthesizerInput = z.infer<typeof evidenceSynthesizerSchema>;
 
+interface MemoryFrameworkProfile {
+  name: string;
+  aliases: string[];
+  position: string;
+  bestFor: string;
+  verify: string;
+}
+
+const MEMORY_FRAMEWORK_PROFILES: MemoryFrameworkProfile[] = [
+  {
+    name: "Mem0",
+    aliases: ["Mem0"],
+    position: "轻量语义记忆层 / memory API",
+    bestFor: "快速接入用户偏好、事实和对话记忆，适合作为应用外置 memory 层做 POC",
+    verify: "验证召回质量、写入策略、删除能力、多租户隔离和长期存储成本"
+  },
+  {
+    name: "Letta/MemGPT",
+    aliases: ["Letta", "MemGPT"],
+    position: "虚拟上下文和显式记忆管理框架",
+    bestFor: "需要 agent 主动管理上下文、长期状态和工具调用边界的复杂任务",
+    verify: "验证上下文换入换出策略、开发复杂度、运行延迟和可观测性"
+  },
+  {
+    name: "Zep",
+    aliases: ["Zep"],
+    position: "会话历史持久化和知识图谱记忆服务",
+    bestFor: "对话型产品需要跨会话记忆、实体关系和历史检索时优先评估",
+    verify: "验证实体抽取质量、图谱维护成本、隐私删除和与现有检索链路的集成成本"
+  },
+  {
+    name: "LangGraph Memory",
+    aliases: ["LangGraph"],
+    position: "图式 agent 的 checkpoint/store 状态管理",
+    bestFor: "已经使用 LangGraph 编排 agent，需要把短期状态、长期 store 和恢复能力纳入同一工程体系",
+    verify: "验证状态边界、checkpoint 存储、回放调试、并发写入和迁移成本"
+  },
+  {
+    name: "CrewAI Memory",
+    aliases: ["CrewAI"],
+    position: "多 agent 任务编排中的内置记忆能力",
+    bestFor: "CrewAI 多角色任务流中需要复用执行历史和 agent 偏好时可作为低成本候选",
+    verify: "验证跨 agent 记忆污染、任务隔离、可控删除和是否能脱离 CrewAI 生态"
+  },
+  {
+    name: "自研轻量记忆层",
+    aliases: ["custom memory", "自研"],
+    position: "基于数据库、向量库、规则和审计日志组合的定制方案",
+    bestFor: "对隐私、审计、权限、删除和成本控制要求高，现成框架难以满足约束时",
+    verify: "验证工程维护成本、评估体系、schema 演进、回滚机制和长期治理投入"
+  }
+];
+
 export const evidenceSynthesizerDefinition: DeepSeekToolDefinition = {
   type: "function",
   function: {
@@ -172,7 +225,7 @@ function buildMemoryFrameworkSynthesis(
     "semantic memory",
     "procedural memory"
   ]);
-  const frameworks = findKnownTerms(evidenceText, ["MemGPT", "Letta", "LangGraph", "Zep", "Mem0", "CrewAI"]);
+  const mentionedFrameworks = getMentionedMemoryFrameworks(evidenceText);
   const metrics = findKnownTerms(evidenceText, [
     "hit rate",
     "recall",
@@ -184,7 +237,8 @@ function buildMemoryFrameworkSynthesis(
     "expiration",
     "conflict"
   ]);
-  const frameworkText = frameworks.length > 0 ? frameworks.join("、") : "当前资料摘要未充分覆盖候选框架对比，需要后续核对官方文档或 benchmark";
+  const frameworkText = renderMemoryFrameworkCoverage(mentionedFrameworks);
+  const frameworkRows = buildMemoryFrameworkRows(mentionedFrameworks);
   const memoryTypeText = memoryTypes.length > 0 ? memoryTypes.join("、") : "短期/工作记忆、长期语义记忆、事件记忆、程序性记忆";
   const metricText =
     metrics.length > 0
@@ -212,7 +266,7 @@ function buildMemoryFrameworkSynthesis(
     outputFormat: input.outputFormat,
     keyFindings: [
       `长上下文记忆选型不能等同于 RAG 评估；应先区分记忆层次：${memoryTypeText}，再决定哪些能力由上下文窗口、向量检索、知识图谱或显式状态管理承担。`,
-      `候选框架线索包括：${frameworkText}。这些框架需要按“写入机制、检索机制、遗忘/更新策略、权限隔离、可观测性、部署成本”拆开比较。`,
+      `候选框架不能只停在已命中的少数名字；本轮至少应把 Mem0、Letta/MemGPT、Zep、LangGraph Memory、CrewAI Memory 和自研轻量记忆层放进同一张筛选表。${frameworkText}`,
       `可量化评估应围绕：${metricText}。没有这些指标时，结论只能作为初筛，不能直接作为选型依据。`,
       `候选资料覆盖 ${sourceTypes}，代表资料包括：${topSources.map((source) => source.title).join("；")}。`
     ],
@@ -221,10 +275,7 @@ function buildMemoryFrameworkSynthesis(
         dimension: "记忆层次",
         notes: "短期上下文适合当前任务连续性；语义记忆适合事实和偏好；事件记忆适合历史交互；程序性记忆适合稳定流程和工具使用习惯。"
       },
-      {
-        dimension: "框架选型",
-        notes: `${frameworkText}。对比时不要只看是否支持 memory，而要看写入、检索、更新、删除、隔离和审计是否可控。`
-      },
+      ...frameworkRows,
       {
         dimension: "评估指标",
         notes: `${metricText}。建议把效果指标和工程指标分开采集，避免只凭演示效果判断长期可用性。`
@@ -242,6 +293,40 @@ function buildMemoryFrameworkSynthesis(
     recommendation:
       "建议先做一轮小范围 POC：选 2 到 3 个候选框架，固定同一批多轮任务样本，分别记录记忆命中率、召回质量、延迟、写入成本、删除能力和污染率，再基于指标做取舍。"
   };
+}
+
+function getMentionedMemoryFrameworks(evidenceText: string): Set<string> {
+  const normalized = evidenceText.toLowerCase();
+  return new Set(
+    MEMORY_FRAMEWORK_PROFILES.filter((profile) =>
+      profile.aliases.some((alias) => normalized.includes(alias.toLowerCase()))
+    ).map((profile) => profile.name)
+  );
+}
+
+function renderMemoryFrameworkCoverage(mentionedFrameworks: Set<string>): string {
+  const allFrameworks = MEMORY_FRAMEWORK_PROFILES.map((profile) => profile.name);
+  const mentioned = allFrameworks.filter((name) => mentionedFrameworks.has(name));
+  const missing = allFrameworks.filter((name) => !mentionedFrameworks.has(name));
+
+  return [
+    mentioned.length > 0 ? `当前资料摘要已命中：${mentioned.join("、")}。` : "当前资料摘要没有稳定命中具体候选框架。",
+    missing.length > 0 ? `仍需补官方文档或 benchmark 核对：${missing.join("、")}。` : ""
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
+function buildMemoryFrameworkRows(mentionedFrameworks: Set<string>): Array<{ dimension: string; notes: string }> {
+  return MEMORY_FRAMEWORK_PROFILES.map((profile) => ({
+    dimension: profile.name,
+    notes: [
+      profile.position,
+      `适用：${profile.bestFor}`,
+      `验证：${profile.verify}`,
+      mentionedFrameworks.has(profile.name) ? "证据状态：本轮资料摘要已命中。" : "证据状态：本轮资料摘要未命中，需补官方文档或 benchmark。"
+    ].join("；")
+  }));
 }
 
 function buildRagEvaluationSynthesis(

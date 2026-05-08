@@ -58,6 +58,7 @@ function buildBrief(input: BriefWriterInput): ResearchBrief {
   const riskLimit = input.length === "detailed" ? input.synthesis.risksOrLimitations.length : 2;
   const keyFindings = input.synthesis.keyFindings.slice(0, findingLimit);
   const risks = input.synthesis.risksOrLimitations.slice(0, riskLimit);
+  const frameworkComparisons = selectFrameworkComparisons(input.synthesis.comparisons);
   const comparisonAnalysis = input.synthesis.comparisons.map((item) => `| ${item.dimension} | ${item.notes} |`).join("\n");
   const suggestedQuestions = [
     "我们这次调研最需要支持哪一个决策？",
@@ -74,6 +75,7 @@ function buildBrief(input: BriefWriterInput): ResearchBrief {
     conclusion,
     researchQuestion: input.synthesis.researchQuestion,
     keyFindings,
+    frameworkComparisons,
     comparisons: input.synthesis.comparisons,
     evaluationCriteria: input.synthesis.evaluationCriteria || [],
     evidenceRequirements: input.synthesis.evidenceRequirements || [],
@@ -99,6 +101,10 @@ function buildBrief(input: BriefWriterInput): ResearchBrief {
 }
 
 function buildBriefTitle(focus: string): string {
+  if (isMemoryFocus(focus)) {
+    return "agent/LLM 记忆框架选型调研简报";
+  }
+
   const normalized = focus.replace(/\s+/g, " ").trim();
   const shortTopic =
     normalized
@@ -135,6 +141,7 @@ function renderMarkdownBrief(input: {
   conclusion: string;
   researchQuestion?: string;
   keyFindings: string[];
+  frameworkComparisons: Array<{ dimension: string; notes: string }>;
   comparisons: Array<{ dimension: string; notes: string }>;
   evaluationCriteria: string[];
   evidenceRequirements: string[];
@@ -144,6 +151,7 @@ function renderMarkdownBrief(input: {
   nextSteps: string[];
   length: BriefWriterInput["length"];
 }): string {
+  const generalComparisons = input.comparisons.filter((item) => !isMemoryFrameworkName(item.dimension));
   const lines = [
     `# ${input.title}`,
     "",
@@ -159,10 +167,14 @@ function renderMarkdownBrief(input: {
     "## 关键发现",
     ...input.keyFindings.map((finding) => `- ${finding}`),
     "",
+    ...renderFrameworkComparisonSection(input.frameworkComparisons),
+    ...(input.frameworkComparisons.length > 0 ? [""] : []),
     "## 对比分析",
     "| 维度 | 观察 |",
     "| --- | --- |",
-    ...input.comparisons.map((item) => `| ${item.dimension} | ${item.notes} |`),
+    ...(generalComparisons.length > 0
+      ? generalComparisons.map((item) => `| ${item.dimension} | ${item.notes} |`)
+      : ["| 选型取舍 | 具体框架差异见上方候选框架对比表。 |"]),
     "",
     "## 局限性",
     ...input.risks.map((risk) => `- ${risk}`),
@@ -187,4 +199,29 @@ function renderMarkdownBrief(input: {
   }
 
   return lines.join("\n");
+}
+
+function selectFrameworkComparisons(comparisons: Array<{ dimension: string; notes: string }>) {
+  return comparisons.filter((item) => isMemoryFrameworkName(item.dimension));
+}
+
+function renderFrameworkComparisonSection(comparisons: Array<{ dimension: string; notes: string }>): string[] {
+  if (comparisons.length === 0) {
+    return [];
+  }
+
+  return [
+    "## 候选框架对比",
+    "| 框架/方案 | 适用场景与验证重点 |",
+    "| --- | --- |",
+    ...comparisons.map((item) => `| ${item.dimension} | ${item.notes} |`)
+  ];
+}
+
+function isMemoryFrameworkName(value: string): boolean {
+  return /^(Mem0|Letta\/MemGPT|Zep|LangGraph Memory|CrewAI Memory|自研轻量记忆层)$/.test(value);
+}
+
+function isMemoryFocus(value: string): boolean {
+  return /memory|memgpt|mem0|letta|zep|long[-\s]?term|记忆|长期记忆|记忆框架|上下文记忆/i.test(value);
 }

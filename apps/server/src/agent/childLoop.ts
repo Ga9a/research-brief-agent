@@ -142,6 +142,13 @@ function buildChildExecutionArgs(
     };
   }
 
+  if (profile.taskType === "collect_sources") {
+    return {
+      ...baseArgs,
+      topic: mergeCollectionTopic(baseArgs.topic, input.defaultToolArgs?.topic)
+    };
+  }
+
   return baseArgs;
 }
 
@@ -156,4 +163,18 @@ function getNonEmptyString(value: unknown): string | undefined {
 function truncateToolString(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
+}
+
+function mergeCollectionTopic(requestedTopic: unknown, defaultTopic: unknown): string {
+  const requested = getNonEmptyString(requestedTopic);
+  const fallback = getNonEmptyString(defaultTopic);
+  if (!requested) {
+    return truncateToolString(fallback || "调研主题", 200);
+  }
+
+  if (!fallback || requested.toLowerCase().includes(fallback.toLowerCase())) {
+    return truncateToolString(requested, 200);
+  }
+
+  return truncateToolString(`${requested} ${fallback}`, 200);
 }

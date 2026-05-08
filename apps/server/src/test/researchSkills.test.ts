@@ -96,6 +96,45 @@ describe("调研 skills", () => {
     expect(report.suggestedQueries.some((query) => query.includes("评估数据集和基准测试"))).toBe(true);
   });
 
+  it("coverage_check_skill 能识别 memory 主题中的记忆模型和候选框架覆盖", () => {
+    const plan = buildResearchPlan("帮我研究 长上下文记忆框架选型");
+    const sources: ResearchSource[] = [
+      {
+        id: "papers:memory",
+        title: "Memory Frameworks for LLM Agents",
+        url: "https://arxiv.org/abs/2402.00001",
+        sourceType: "papers",
+        publisher: "arXiv",
+        publishedAt: "2024",
+        summary:
+          "LLM agent memory frameworks compare short-term memory, long-term memory, episodic memory, semantic memory, procedural memory, Mem0, Letta, Zep and LangGraph.",
+        relevanceScore: 1,
+        credibilityScore: 0.9
+      }
+    ];
+    const evidence = extractEvidenceFromSources(sources, plan);
+    const synthesis: ResearchSynthesis = {
+      focus: plan.researchGoal,
+      researchQuestion: plan.researchQuestion,
+      outputFormat: "decision_brief",
+      keyFindings: [
+        "长上下文记忆选型需要区分 short-term memory、long-term memory、episodic memory、semantic memory 和 procedural memory。",
+        "候选框架应比较 Mem0、Letta/MemGPT、Zep、LangGraph Memory、CrewAI Memory 和自研轻量记忆层。"
+      ],
+      comparisons: [
+        { dimension: "Mem0", notes: "轻量语义记忆层，需要验证召回质量和删除能力。" },
+        { dimension: "Letta/MemGPT", notes: "虚拟上下文管理，需要验证复杂度和延迟。" }
+      ],
+      risksOrLimitations: ["需要验证隐私、记忆污染和长期成本。"],
+      recommendation: "用 POC 比较候选框架。"
+    };
+
+    const report = evaluateCoverage({ plan, sources, synthesis, evidence });
+
+    expect(report.coveredAspects).toContain("记忆模型和核心概念");
+    expect(report.coveredAspects.some((aspect) => aspect.includes("主流记忆框架对比"))).toBe(true);
+  });
+
   it("coverage_check_skill 在关键方面覆盖后允许进入写作", () => {
     const plan = buildResearchPlan("RAG 评估体系");
     const sources = [ragSource, benchmarkSource];
