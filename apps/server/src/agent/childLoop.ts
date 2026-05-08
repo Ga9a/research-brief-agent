@@ -121,7 +121,7 @@ function buildChildExecutionArgs(
       throw new Error("整理证据需要先注入 sources。");
     }
 
-    const focus = getNonEmptyString(baseArgs.focus) || input.instruction;
+    const focus = truncateToolString(getNonEmptyString(baseArgs.focus) || input.instruction, 200);
     const outputFormat = getNonEmptyString(baseArgs.outputFormat) || "decision_brief";
     return {
       ...baseArgs,
@@ -151,4 +151,9 @@ function toObjectArgs(args: unknown): Record<string, unknown> {
 
 function getNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function truncateToolString(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
 }

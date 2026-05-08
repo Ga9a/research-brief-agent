@@ -424,6 +424,19 @@ describe("调研工具注册表和后续工具", () => {
     expect(parsed.synthesis.comparisons.map((item: { notes: string }) => item.notes).join("\n")).toContain("RAGAS");
   });
 
+  it("evidence_synthesizer 在 memory 主题下不会被来源里的 RAG 关键词带偏", async () => {
+    const result = await runEvidenceSynthesizer({
+      sources: [sampleSource],
+      focus: "帮我研究 长上下文记忆框架选型",
+      outputFormat: "decision_brief"
+    });
+    const parsed = JSON.parse(result.output);
+
+    expect(parsed.synthesis.researchQuestion).toContain("记忆框架");
+    expect(parsed.synthesis.researchQuestion).not.toContain("RAG");
+    expect(parsed.synthesis.keyFindings.join("\n")).toContain("不能等同于 RAG 评估");
+  });
+
   it("brief_writer 能生成自然语言简报", async () => {
     const synthesis = JSON.parse(
       (

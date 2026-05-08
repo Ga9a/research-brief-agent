@@ -114,9 +114,19 @@ export interface CompactState {
 
 export interface ChatResponse {
   sessionId: string;
+  sessionTitle?: string;
   messages: UiMessage[];
   researchEvents: ResearchToolEvent[];
   compactState?: CompactState;
+}
+
+export interface ChatSessionSummary {
+  sessionId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessagePreview: string;
 }
 
 export type AgentStreamEvent =

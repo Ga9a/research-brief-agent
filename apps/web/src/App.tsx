@@ -8,9 +8,13 @@ import {
   FileText,
   Gauge,
   Loader2,
-  Send
+  MessageSquare,
+  Plus,
+  Send,
+  Trash2
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -85,9 +89,19 @@ interface CompactState {
 
 interface ChatResponse {
   sessionId: string;
+  sessionTitle?: string;
   messages: UiMessage[];
   researchEvents: ResearchToolEvent[];
   compactState?: CompactState;
+}
+
+interface SessionSummary {
+  sessionId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessagePreview: string;
 }
 
 type AgentStreamEvent =
@@ -107,10 +121,77 @@ export function App() {
   const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [compactState, setCompactState] = useState<CompactState | undefined>();
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const currentTurnEventOffsetRef = useRef(0);
 
   const latestResearchEvents = useMemo(() => researchEvents.slice().reverse(), [researchEvents]);
   const researchSources = useMemo(() => extractResearchSources(researchEvents), [researchEvents]);
+
+  useEffect(() => {
+    void refreshSessions();
+  }, []);
+
+  async function refreshSessions() {
+    const response = await fetch("/api/sessions");
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as { sessions?: SessionSummary[] };
+    setSessions(payload.sessions || []);
+  }
+
+  async function loadSession(nextSessionId: string) {
+    if (isLoading || loadingSessionId) {
+      return;
+    }
+
+    setLoadingSessionId(nextSessionId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(nextSessionId)}`);
+      if (!response.ok) {
+        throw new Error("会话不存在或已被删除。");
+      }
+
+      const payload = (await response.json()) as ChatResponse;
+      setSessionId(payload.sessionId);
+      setMessages(payload.messages);
+      setResearchEvents(payload.researchEvents);
+      setCurrentTurnEvents([]);
+      currentTurnEventOffsetRef.current = payload.researchEvents.length;
+      setCompactState(payload.compactState);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "加载会话失败");
+      await refreshSessions();
+    } finally {
+      setLoadingSessionId(null);
+    }
+  }
+
+  async function deleteSession(targetSessionId: string, event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    if (isLoading) {
+      return;
+    }
+
+    await fetch(`/api/sessions/${encodeURIComponent(targetSessionId)}`, { method: "DELETE" });
+    setSessions((current) => current.filter((session) => session.sessionId !== targetSessionId));
+    if (sessionId === targetSessionId) {
+      startNewSession();
+    }
+  }
+
+  function startNewSession() {
+    setSessionId(undefined);
+    setMessages([]);
+    setResearchEvents([]);
+    setCurrentTurnEvents([]);
+    setCompactState(undefined);
+    setError(null);
+    currentTurnEventOffsetRef.current = 0;
+  }
 
   useEffect(() => {
     if (!thinkingStartedAt) {
@@ -197,6 +278,7 @@ export function App() {
       setResearchEvents(event.response.researchEvents);
       setCurrentTurnEvents(event.response.researchEvents.slice(currentTurnEventOffsetRef.current));
       setCompactState(event.response.compactState);
+      void refreshSessions();
       return;
     }
 
@@ -207,6 +289,16 @@ export function App() {
 
   return (
     <main className="app-shell">
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={sessionId}
+        loadingSessionId={loadingSessionId}
+        isLoading={isLoading}
+        onNewSession={startNewSession}
+        onLoadSession={loadSession}
+        onDeleteSession={deleteSession}
+      />
+
       <section className="conversation-panel" aria-label="调研助手对话">
         <header className="topbar">
           <div>
@@ -306,6 +398,67 @@ export function App() {
         </div>
       </aside>
     </main>
+  );
+}
+
+function SessionSidebar({
+  sessions,
+  activeSessionId,
+  loadingSessionId,
+  isLoading,
+  onNewSession,
+  onLoadSession,
+  onDeleteSession
+}: {
+  sessions: SessionSummary[];
+  activeSessionId: string | undefined;
+  loadingSessionId: string | null;
+  isLoading: boolean;
+  onNewSession: () => void;
+  onLoadSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string, event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <aside className="session-sidebar" aria-label="历史会话">
+      <div className="session-sidebar-header">
+        <h2>会话</h2>
+        <button type="button" onClick={onNewSession} disabled={isLoading} aria-label="新建会话">
+          <Plus size={16} />
+        </button>
+      </div>
+
+      <div className="session-list">
+        {sessions.length === 0 ? (
+          <p className="muted session-empty">暂无会话</p>
+        ) : (
+          sessions.map((session) => (
+            <div className={`session-item ${session.sessionId === activeSessionId ? "active" : ""}`} key={session.sessionId}>
+              <button
+                type="button"
+                className="session-open"
+                onClick={() => onLoadSession(session.sessionId)}
+                disabled={isLoading || loadingSessionId === session.sessionId}
+              >
+                <MessageSquare size={15} />
+                <span>
+                  <strong>{session.title}</strong>
+                  <small>{formatSessionTime(session.updatedAt)}</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="session-delete"
+                onClick={(event) => onDeleteSession(session.sessionId, event)}
+                disabled={isLoading}
+                aria-label="删除会话"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -698,6 +851,15 @@ function formatTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit"
+  }).format(new Date(value));
+}
+
+function formatSessionTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
   }).format(new Date(value));
 }
 

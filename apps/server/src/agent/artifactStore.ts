@@ -19,6 +19,12 @@ export interface ResearchArtifactScope {
 export class ArtifactStore {
   private readonly artifacts = new Map<string, ResearchArtifact>();
 
+  constructor(initialArtifacts: ResearchArtifact[] = []) {
+    for (const artifact of initialArtifacts) {
+      this.artifacts.set(artifact.ref, artifact);
+    }
+  }
+
   save<T>(kind: ResearchArtifactKind, value: T, scope: Required<ResearchArtifactScope>): ResearchArtifact<T> {
     const artifact: ResearchArtifact<T> = {
       ref: `${kind}:${randomUUID()}`,
@@ -55,6 +61,10 @@ export class ArtifactStore {
     return [...this.artifacts.values()].filter((artifact) => artifact.kind === kind && matchesScope(artifact, scope)) as Array<
       ResearchArtifact<T>
     >;
+  }
+
+  listAll(): ResearchArtifact[] {
+    return [...this.artifacts.values()];
   }
 }
 

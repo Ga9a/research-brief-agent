@@ -58,6 +58,22 @@ export class ContextBudgetManager {
     };
   }
 
+  hydrateState(state: CompactState | undefined): void {
+    if (!state) {
+      return;
+    }
+
+    this.state.hasCompacted = state.hasCompacted;
+    this.state.lastSummary = state.lastSummary;
+    this.state.recentFiles = [...state.recentFiles];
+    this.state.persistedOutputs = [...state.persistedOutputs];
+    this.state.estimatedTokens = state.estimatedTokens;
+    this.state.contextWindowTokens = state.contextWindowTokens || this.options.contextWindowTokens;
+    this.state.summaryTriggerTokens = state.summaryTriggerTokens || Math.floor(this.options.contextWindowTokens * this.options.summaryTriggerRatio);
+    this.state.compactedMessageCount = state.compactedMessageCount;
+    this.state.lastCompactedAt = state.lastCompactedAt;
+  }
+
   prepareToolResultForContext(toolName: string, content: string, reason: PersistedOutputReference["reason"] = "size-threshold"): string {
     if (content.length <= this.options.inlineCharLimit) {
       return content;

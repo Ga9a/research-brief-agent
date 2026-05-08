@@ -4,6 +4,13 @@ import { ArtifactStore } from "./artifactStore.js";
 import { ContextBudgetManager, type CompactContext } from "./contextBudget.js";
 import { createAgentHookRunner, ensureHookCanContinue, type AgentHookRunner, type AgentRunHooks } from "./hooks.js";
 import { loadSkillToolDefinition, runLoadSkill, validateLoadSkillArgs } from "./loadSkillTool.js";
+import {
+  deletePersistedSession,
+  listPersistedSessions,
+  loadPersistedSession,
+  savePersistedSession,
+  type PersistedSessionRecord
+} from "./sessionPersistence.js";
 import { runTaskTool } from "./taskRunner.js";
 import {
   taskStepLabels,
@@ -14,6 +21,7 @@ import {
 } from "./taskTool.js";
 import type {
   ChatResponse,
+  ChatSessionSummary,
   ReasoningSummary,
   ResearchBrief,
   ResearchSynthesis,
@@ -33,12 +41,20 @@ const TASK_LIMITS: Record<ChildTaskType, number> = {
 };
 
 interface SessionState {
+  metadata: SessionMetadata;
   modelMessages: DeepSeekMessage[];
   uiMessages: UiMessage[];
   researchEvents: ResearchToolEvent[];
   artifactStore: ArtifactStore;
   contextBudget: ContextBudgetManager;
   researchMemory: SessionResearchMemory;
+}
+
+interface SessionMetadata {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface SessionResearchMemory {
@@ -68,6 +84,10 @@ function buildSystemPrompt(): string {
     getDefaultSkillLoader().getDescriptions(),
     "",
     "核心约束：",
+    "- 严格锁定用户当前主题和 research_planning_skill 的研究问题。除非用户明确要求，不要把“长上下文记忆、agent memory、memory framework”改写成 RAG 评估问题；RAG 只能作为相邻技术背景，不得替代主问题。",
+    "- 默认执行路径应短而稳定：collect_sources -> synthesize_evidence -> write_brief。只有 coverage feedback 明确表示覆盖不足时，才追加一次 collect_sources 并重新 synthesize_evidence。",
+    "- 不要重复调用相同 taskType 和相同 instruction 的 task；已有结果足够时直接进入下一步。write_brief 完成后不要再次生成简报。",
+    "- 子任务 instruction 保持一两句话，围绕当前研究问题、缺口和输出用途；不要在 instruction 中塞入长清单、完整资料、内部日志或大段 JSON。",
     "- 不要直接臆造资料，资料收集必须通过 task 子任务完成。",
     "- 需要自主判断资料是否足够：可以先收集资料，再整理证据；如果整理后发现资料不足，可以追加资料收集并重新整理；如果简报不够贴合用户目标，可以重新生成一次。",
     "- 每轮调研必须先明确研究问题、决策场景、评估标准和证据/实验要求。缺少这些内容时，最终简报必须指出缺口，而不是只给泛泛建议。",
@@ -94,6 +114,7 @@ export async function runAgentTurn(
   ensureHookCanContinue(await hookRunner.sessionStarted({ sessionId }));
 
   if (isManualCompactCommand(userContent)) {
+    updateSessionTitleFromUserMessage(state, userContent);
     state.uiMessages.push({
       id: randomUUID(),
       role: "user",
@@ -105,6 +126,7 @@ export async function runAgentTurn(
     return await finalizeResponse(sessionId, state, hookRunner);
   }
 
+  updateSessionTitleFromUserMessage(state, userContent);
   state.uiMessages.push({
     id: randomUUID(),
     role: "user",
@@ -177,12 +199,20 @@ export async function runAgentTurn(
         parsedArgs = parseToolArguments(toolCall.function.arguments);
         const taskArgs = validateTaskArgs(parsedArgs);
         const callKey = createToolCallKey(toolName, taskArgs);
-        if (executedToolCalls.has(callKey)) {
-          researchEvent = createFailedResearchEvent(
-            taskArgs.taskType,
-            taskArgs,
-            `已跳过重复调用：本轮调研已经用相同参数执行过该步骤。`,
-          );
+        if (executedToolCalls.has(callKey) && !hasNewDependencyForRepeat(taskArgs.taskType, turnEvents)) {
+          state.modelMessages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: state.contextBudget.prepareToolResultForContext(
+              "task",
+              JSON.stringify({
+                status: "skipped",
+                reason: "duplicate_tool_call",
+                message: "本轮已经执行过相同参数的步骤，请直接使用已有结果并进入下一步，不要重复调用。"
+              })
+            )
+          });
+          continue;
         } else {
           const preconditionError = validateTaskPolicy(taskArgs, turnEvents);
           if (preconditionError) {
@@ -241,6 +271,16 @@ export async function runAgentTurn(
         );
         return await finalizeResponse(sessionId, state, hookRunner);
       }
+
+      if (researchEvent.toolName === "write_brief" && researchEvent.status === "completed") {
+        appendFinalAssistantMessage(
+          state,
+          getLatestBriefContent(turnEvents) || buildFallbackFinal(turnEvents, "简报工具已完成，但未解析到结构化简报内容。") || "调研简报已生成。",
+          turnEvents,
+          researchPlan
+        );
+        return await finalizeResponse(sessionId, state, hookRunner);
+      }
     }
   }
 
@@ -260,7 +300,21 @@ function getSession(sessionId: string): SessionState {
     return existing;
   }
 
+  const persisted = loadPersistedSession(sessionId);
+  if (persisted) {
+    const restored = hydrateSessionState(persisted);
+    sessions.set(sessionId, restored);
+    return restored;
+  }
+
+  const now = new Date().toISOString();
   const created: SessionState = {
+    metadata: {
+      id: sessionId,
+      title: "新会话",
+      createdAt: now,
+      updatedAt: now
+    },
     modelMessages: [systemPrompt],
     uiMessages: [],
     researchEvents: [],
@@ -270,6 +324,102 @@ function getSession(sessionId: string): SessionState {
   };
   sessions.set(sessionId, created);
   return created;
+}
+
+export function listChatSessions(): ChatSessionSummary[] {
+  const summaries = new Map<string, ChatSessionSummary>();
+  for (const summary of listPersistedSessions()) {
+    summaries.set(summary.sessionId, summary);
+  }
+
+  for (const state of sessions.values()) {
+    summaries.set(state.metadata.id, summarizeSession(state));
+  }
+
+  return [...summaries.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export function getChatSessionResponse(sessionId: string): ChatResponse | undefined {
+  const persisted = loadPersistedSession(sessionId);
+  const live = sessions.get(sessionId);
+  const state = live || (persisted ? hydrateSessionState(persisted) : undefined);
+  if (!state) {
+    return undefined;
+  }
+
+  sessions.set(sessionId, state);
+  return buildResponse(sessionId, state);
+}
+
+export function deleteChatSession(sessionId: string): boolean {
+  const hadLiveSession = sessions.delete(sessionId);
+  const hadPersistedSession = deletePersistedSession(sessionId);
+  return hadLiveSession || hadPersistedSession;
+}
+
+function hydrateSessionState(record: PersistedSessionRecord): SessionState {
+  const contextBudget = new ContextBudgetManager(record.id);
+  contextBudget.hydrateState(record.compactState);
+
+  return {
+    metadata: {
+      id: record.id,
+      title: record.title || "新会话",
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt
+    },
+    modelMessages: record.modelMessages.length > 0 ? record.modelMessages : [systemPrompt],
+    uiMessages: record.uiMessages,
+    researchEvents: record.researchEvents,
+    artifactStore: new ArtifactStore(record.artifacts || []),
+    contextBudget,
+    researchMemory: record.researchMemory || { completedTopics: [] }
+  };
+}
+
+function persistSessionState(state: SessionState): void {
+  savePersistedSession({
+    id: state.metadata.id,
+    title: state.metadata.title,
+    createdAt: state.metadata.createdAt,
+    updatedAt: state.metadata.updatedAt,
+    modelMessages: state.modelMessages,
+    uiMessages: state.uiMessages,
+    researchEvents: state.researchEvents,
+    compactState: state.contextBudget.getState(),
+    researchMemory: state.researchMemory,
+    artifacts: state.artifactStore.listAll()
+  });
+}
+
+function summarizeSession(state: SessionState): ChatSessionSummary {
+  const lastMessage = [...state.uiMessages].reverse().find((message) => message.content.trim());
+  return {
+    sessionId: state.metadata.id,
+    title: state.metadata.title,
+    createdAt: state.metadata.createdAt,
+    updatedAt: state.metadata.updatedAt,
+    messageCount: state.uiMessages.length,
+    lastMessagePreview: lastMessage ? truncateText(lastMessage.content.replace(/\s+/g, " ").trim(), 90) : ""
+  };
+}
+
+function updateSessionTitleFromUserMessage(state: SessionState, content: string): void {
+  if (state.uiMessages.some((message) => message.role === "user")) {
+    return;
+  }
+
+  state.metadata.title = createSessionTitle(content);
+  state.metadata.updatedAt = new Date().toISOString();
+}
+
+function createSessionTitle(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return truncateText(normalized, 28) || "新会话";
+}
+
+function truncateText(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
 }
 
 export function createToolCallKey(toolName: string, args: unknown): string {
@@ -468,6 +618,29 @@ function validateTaskPolicy(taskArgs: TaskToolArgs, turnEvents: ResearchToolEven
 
 function countCompletedTask(turnEvents: ResearchToolEvent[], taskType: ChildTaskType): number {
   return turnEvents.filter((event) => event.toolName === taskType && event.status === "completed").length;
+}
+
+function hasNewDependencyForRepeat(taskType: ChildTaskType, turnEvents: ResearchToolEvent[]): boolean {
+  if (taskType === "synthesize_evidence") {
+    return latestCompletedTaskIndex(turnEvents, "collect_sources") > latestCompletedTaskIndex(turnEvents, "synthesize_evidence");
+  }
+
+  if (taskType === "write_brief") {
+    return latestCompletedTaskIndex(turnEvents, "synthesize_evidence") > latestCompletedTaskIndex(turnEvents, "write_brief");
+  }
+
+  return false;
+}
+
+function latestCompletedTaskIndex(turnEvents: ResearchToolEvent[], taskType: ChildTaskType): number {
+  for (let index = turnEvents.length - 1; index >= 0; index -= 1) {
+    const event = turnEvents[index];
+    if (event.toolName === taskType && event.status === "completed") {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 function getLatestCoverageFeedback(turnEvents: ResearchToolEvent[]): CoverageReport | undefined {
@@ -819,6 +992,8 @@ function parseJson<T>(output: string | undefined): T | undefined {
 }
 
 async function finalizeResponse(sessionId: string, state: SessionState, hookRunner: AgentHookRunner): Promise<ChatResponse> {
+  state.metadata.updatedAt = new Date().toISOString();
+  persistSessionState(state);
   const response = buildResponse(sessionId, state);
   ensureHookCanContinue(await hookRunner.finalResponseCreated({ response }));
   return response;
@@ -827,6 +1002,7 @@ async function finalizeResponse(sessionId: string, state: SessionState, hookRunn
 function buildResponse(sessionId: string, state: SessionState): ChatResponse {
   return {
     sessionId,
+    sessionTitle: state.metadata.title,
     messages: state.uiMessages,
     researchEvents: state.researchEvents,
     compactState: state.contextBudget.getState()

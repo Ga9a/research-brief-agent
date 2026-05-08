@@ -53,6 +53,14 @@ describe("调研 skills", () => {
     expect(plan.evidenceRequirements.some((item) => item.includes("POC 实验设计"))).toBe(true);
   });
 
+  it("research_planning_skill 不会把 memory benchmark 误判成 RAG 评估", () => {
+    const plan = buildResearchPlan("帮我研究 长上下文记忆框架选型和 memory benchmark");
+
+    expect(plan.researchQuestion).toContain("记忆框架");
+    expect(plan.researchQuestion).not.toContain("RAG");
+    expect(plan.searchQueries.some((query) => query.includes("memory"))).toBe(true);
+  });
+
   it("evidence_extraction_skill 能从来源摘要中抽取指标和框架线索", () => {
     const plan = buildResearchPlan("RAG 评估体系");
     const extraction = extractEvidenceFromSources([ragSource], plan);

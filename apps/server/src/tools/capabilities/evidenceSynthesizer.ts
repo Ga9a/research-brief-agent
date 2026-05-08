@@ -100,6 +100,10 @@ function buildGeneralSynthesis(
 function buildSynthesis(input: EvidenceSynthesizerInput): ResearchSynthesis {
   const topSources = [...input.sources].sort((left, right) => right.relevanceScore - left.relevanceScore).slice(0, 3);
   const sourceTypes = [...new Set(input.sources.map((source) => source.sourceType))].join("、");
+  if (isMemoryTopic(input.focus)) {
+    return buildMemoryFrameworkSynthesis(input, topSources, sourceTypes);
+  }
+
   if (isRagEvaluationTopic(input)) {
     return buildRagEvaluationSynthesis(input, topSources, sourceTypes);
   }
@@ -152,6 +156,92 @@ function buildSynthesis(input: EvidenceSynthesizerInput): ResearchSynthesis {
       "建议先形成一个小而可执行的评估框架：明确目标、挑选代表性样本、设计少量关键指标，再用人工复核校准自动化评估结果。"
   };
   */
+}
+
+function buildMemoryFrameworkSynthesis(
+  input: EvidenceSynthesizerInput,
+  topSources: EvidenceSynthesizerInput["sources"],
+  sourceTypes: string
+): ResearchSynthesis {
+  const evidenceText = buildEvidenceText(input.sources);
+  const memoryTypes = findKnownTerms(evidenceText, [
+    "working memory",
+    "short-term memory",
+    "long-term memory",
+    "episodic memory",
+    "semantic memory",
+    "procedural memory"
+  ]);
+  const frameworks = findKnownTerms(evidenceText, ["MemGPT", "Letta", "LangGraph", "Zep", "Mem0", "CrewAI"]);
+  const metrics = findKnownTerms(evidenceText, [
+    "hit rate",
+    "recall",
+    "latency",
+    "token",
+    "cost",
+    "privacy",
+    "personalization",
+    "expiration",
+    "conflict"
+  ]);
+  const frameworkText = frameworks.length > 0 ? frameworks.join("、") : "当前资料摘要未充分覆盖候选框架对比，需要后续核对官方文档或 benchmark";
+  const memoryTypeText = memoryTypes.length > 0 ? memoryTypes.join("、") : "短期/工作记忆、长期语义记忆、事件记忆、程序性记忆";
+  const metricText =
+    metrics.length > 0
+      ? metrics.join("、")
+      : "命中率、召回质量、检索/写入延迟、token 成本、存储成本、隐私和记忆污染风险";
+
+  return {
+    focus: input.focus,
+    researchQuestion: "应该如何选择或设计 agent/LLM 记忆框架，才能在效果、成本、延迟和安全性之间取得可验证的平衡？",
+    decisionContext: "用于选型 memory 框架、设计记忆模块，或规划 memory benchmark / POC。",
+    evaluationCriteria: [
+      "记忆命中率和召回质量",
+      "记忆过期、遗忘和冲突解决策略",
+      "检索延迟、写入延迟和端到端 latency",
+      "token 成本、存储成本和索引维护成本",
+      "个性化效果和用户满意度提升",
+      "隐私、权限、可删除性和记忆污染率"
+    ],
+    evidenceRequirements: [
+      "需要至少一个候选框架/方法对比表",
+      "需要提出可执行的 POC 实验设计和指标采集方式",
+      "需要区分短期上下文、长期语义记忆、事件记忆和程序性记忆"
+    ],
+    evidenceGaps: inferEvidenceGaps(input),
+    outputFormat: input.outputFormat,
+    keyFindings: [
+      `长上下文记忆选型不能等同于 RAG 评估；应先区分记忆层次：${memoryTypeText}，再决定哪些能力由上下文窗口、向量检索、知识图谱或显式状态管理承担。`,
+      `候选框架线索包括：${frameworkText}。这些框架需要按“写入机制、检索机制、遗忘/更新策略、权限隔离、可观测性、部署成本”拆开比较。`,
+      `可量化评估应围绕：${metricText}。没有这些指标时，结论只能作为初筛，不能直接作为选型依据。`,
+      `候选资料覆盖 ${sourceTypes}，代表资料包括：${topSources.map((source) => source.title).join("；")}。`
+    ],
+    comparisons: [
+      {
+        dimension: "记忆层次",
+        notes: "短期上下文适合当前任务连续性；语义记忆适合事实和偏好；事件记忆适合历史交互；程序性记忆适合稳定流程和工具使用习惯。"
+      },
+      {
+        dimension: "框架选型",
+        notes: `${frameworkText}。对比时不要只看是否支持 memory，而要看写入、检索、更新、删除、隔离和审计是否可控。`
+      },
+      {
+        dimension: "评估指标",
+        notes: `${metricText}。建议把效果指标和工程指标分开采集，避免只凭演示效果判断长期可用性。`
+      },
+      {
+        dimension: "风险治理",
+        notes: "重点检查记忆污染、过期信息、隐私权限、跨用户泄漏、不可删除和长期成本膨胀。"
+      }
+    ],
+    risksOrLimitations: [
+      "当前资料多来自外部 API 的标题和摘要，正式选型前需要打开原文核对具体实现、许可、维护状态和 benchmark 口径。",
+      "记忆框架的公开 benchmark 往往不能直接代表业务效果，需要用真实任务样本做 POC。",
+      "长期记忆会引入隐私、权限、过期和污染问题；如果没有删除、审计和隔离机制，效果提升可能被治理风险抵消。"
+    ],
+    recommendation:
+      "建议先做一轮小范围 POC：选 2 到 3 个候选框架，固定同一批多轮任务样本，分别记录记忆命中率、召回质量、延迟、写入成本、删除能力和污染率，再基于指标做取舍。"
+  };
 }
 
 function buildRagEvaluationSynthesis(
@@ -233,8 +323,11 @@ function buildRagEvaluationSynthesis(
 }
 
 function isRagEvaluationTopic(input: EvidenceSynthesizerInput): boolean {
-  const text = `${input.focus} ${buildEvidenceText(input.sources)}`;
-  return /rag|retrieval augmented generation|检索增强|ragas|trulens|deepeval|langsmith/i.test(text);
+  if (isMemoryTopic(input.focus)) {
+    return false;
+  }
+
+  return /rag|retrieval augmented generation|检索增强|ragas|trulens|deepeval|langsmith/i.test(input.focus);
 }
 
 function inferResearchQuestion(focus: string): string {

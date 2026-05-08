@@ -4,7 +4,7 @@ import express from "express";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { runAgentTurn } from "./agent/loop.js";
+import { deleteChatSession, getChatSessionResponse, listChatSessions, runAgentTurn } from "./agent/loop.js";
 
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -30,6 +30,25 @@ app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/api/sessions", (_req, res) => {
+  res.json({ sessions: listChatSessions() });
+});
+
+app.get("/api/sessions/:sessionId", (req, res) => {
+  const response = getChatSessionResponse(req.params.sessionId);
+  if (!response) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+
+  res.json(response);
+});
+
+app.delete("/api/sessions/:sessionId", (req, res) => {
+  const deleted = deleteChatSession(req.params.sessionId);
+  res.json({ ok: true, deleted });
 });
 
 app.post("/api/chat", async (req, res) => {

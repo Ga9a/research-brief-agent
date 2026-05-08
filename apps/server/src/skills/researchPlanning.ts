@@ -31,40 +31,6 @@ export function buildResearchPlan(userGoal: string): ResearchPlan {
   const topic = userGoal.trim() || "用户指定主题";
   const normalizedGoal = normalizeText(topic);
 
-  if (isRagEvaluationTopic(normalizedGoal)) {
-    return {
-      researchGoal: topic,
-      researchQuestion: "如何为 RAG 系统建立可落地、可复核、能支持团队决策的评估体系？",
-      decisionContext: "用于选择评估框架、设计评估指标、确定数据集和落地验证流程。",
-      requiredAspects: RAG_EVALUATION_ASPECTS,
-      optionalAspects: ["企业落地场景", "人工评估与自动评估结合", "评估成本和可维护性"],
-      searchQueries: [
-        "RAG evaluation metrics faithfulness context precision recall",
-        "RAGAS TruLens ARES DeepEval LangSmith comparison",
-        "RAG evaluation benchmark datasets RGB CRUD KILT Natural Questions",
-        "RAG evaluation best practices pitfalls production"
-      ],
-      successCriteria: [
-        "能区分检索质量、生成质量和端到端质量",
-        "能对比至少 3 个主流评估框架",
-        "能说明常见数据集或 benchmark 的用途",
-        "能指出落地评估中的风险和实践建议"
-      ],
-      evaluationCriteria: [
-        "答案忠实度和幻觉率",
-        "上下文相关性、context precision 和 context recall",
-        "检索召回、排序质量和覆盖率",
-        "端到端任务成功率",
-        "人工复核一致性、评估成本和延迟"
-      ],
-      evidenceRequirements: [
-        "至少覆盖指标定义、框架对比和 benchmark 数据集",
-        "说明自动化评估与人工评估的适用边界",
-        "给出小样本验证流程，而不是只给概念建议"
-      ]
-    };
-  }
-
   if (isMemoryFrameworkTopic(normalizedGoal)) {
     return {
       researchGoal: topic,
@@ -96,6 +62,40 @@ export function buildResearchPlan(userGoal: string): ResearchPlan {
         "需要至少一个候选框架/方法对比表",
         "需要提出可执行的 POC 实验设计和指标采集方式",
         "需要区分短期上下文、长期语义记忆、事件记忆和程序性记忆"
+      ]
+    };
+  }
+
+  if (isRagEvaluationTopic(normalizedGoal)) {
+    return {
+      researchGoal: topic,
+      researchQuestion: "如何为 RAG 系统建立可落地、可复核、能支持团队决策的评估体系？",
+      decisionContext: "用于选择评估框架、设计评估指标、确定数据集和落地验证流程。",
+      requiredAspects: RAG_EVALUATION_ASPECTS,
+      optionalAspects: ["企业落地场景", "人工评估与自动评估结合", "评估成本和可维护性"],
+      searchQueries: [
+        "RAG evaluation metrics faithfulness context precision recall",
+        "RAGAS TruLens ARES DeepEval LangSmith comparison",
+        "RAG evaluation benchmark datasets RGB CRUD KILT Natural Questions",
+        "RAG evaluation best practices pitfalls production"
+      ],
+      successCriteria: [
+        "能区分检索质量、生成质量和端到端质量",
+        "能对比至少 3 个主流评估框架",
+        "能说明常见数据集或 benchmark 的用途",
+        "能指出落地评估中的风险和实践建议"
+      ],
+      evaluationCriteria: [
+        "答案忠实度和幻觉率",
+        "上下文相关性、context precision 和 context recall",
+        "检索召回、排序质量和覆盖率",
+        "端到端任务成功率",
+        "人工复核一致性、评估成本和延迟"
+      ],
+      evidenceRequirements: [
+        "至少覆盖指标定义、框架对比和 benchmark 数据集",
+        "说明自动化评估与人工评估的适用边界",
+        "给出小样本验证流程，而不是只给概念建议"
       ]
     };
   }
@@ -140,7 +140,7 @@ export function renderResearchPlanForModel(plan: ResearchPlan): string {
 }
 
 function isRagEvaluationTopic(value: string): boolean {
-  return /rag|retrieval augmented generation|检索增强|评估|evaluation|benchmark|ragas|trulens|deepeval|langsmith/i.test(value);
+  return /rag|retrieval augmented generation|检索增强|ragas|trulens|deepeval|langsmith/i.test(value);
 }
 
 function isMemoryFrameworkTopic(value: string): boolean {
