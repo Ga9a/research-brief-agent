@@ -115,7 +115,7 @@ export function App() {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [researchEvents, setResearchEvents] = useState<ResearchToolEvent[]>([]);
   const [currentTurnEvents, setCurrentTurnEvents] = useState<ResearchToolEvent[]>([]);
-  const [input, setInput] = useState("帮我研究 长上下文记忆框架选型");
+  const [input, setInput] = useState("Research long-context memory framework selection");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
@@ -133,13 +133,14 @@ export function App() {
   }, []);
 
   async function refreshSessions() {
-    const response = await fetch("/api/sessions");
-    if (!response.ok) {
-      return;
+    try {
+      const response = await fetch("/api/sessions");
+      if (!response.ok) throw new Error("Failed to refresh sessions");
+      const payload = (await response.json()) as { sessions?: SessionSummary[] };
+      setSessions(payload.sessions || []);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to refresh sessions");
     }
-
-    const payload = (await response.json()) as { sessions?: SessionSummary[] };
-    setSessions(payload.sessions || []);
   }
 
   async function loadSession(nextSessionId: string) {
@@ -152,7 +153,7 @@ export function App() {
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(nextSessionId)}`);
       if (!response.ok) {
-        throw new Error("会话不存在或已被删除。");
+        throw new Error("The session does not exist or has been deleted.");
       }
 
       const payload = (await response.json()) as ChatResponse;
@@ -163,7 +164,7 @@ export function App() {
       currentTurnEventOffsetRef.current = payload.researchEvents.length;
       setCompactState(payload.compactState);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "加载会话失败");
+      setError(requestError instanceof Error ? requestError.message : "Failed to load the session");
       await refreshSessions();
     } finally {
       setLoadingSessionId(null);
@@ -176,10 +177,13 @@ export function App() {
       return;
     }
 
-    await fetch(`/api/sessions/${encodeURIComponent(targetSessionId)}`, { method: "DELETE" });
-    setSessions((current) => current.filter((session) => session.sessionId !== targetSessionId));
-    if (sessionId === targetSessionId) {
-      startNewSession();
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(targetSessionId)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Failed to delete the session");
+      setSessions((current) => current.filter((session) => session.sessionId !== targetSessionId));
+      if (sessionId === targetSessionId) startNewSession();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to delete the session");
     }
   }
 
@@ -242,16 +246,18 @@ export function App() {
         signal: controller.signal
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error(`请求失败，状态码：${response.status}`);
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(details.error || `Request failed with status ${response.status}`);
       }
+      if (!response.body) throw new Error("The server did not return a response stream");
 
       await readStream(response.body, handleStreamEvent);
     } catch (requestError) {
       if (requestError instanceof Error && requestError.name === "AbortError") {
-        setError("请求超时，请检查后端服务或 DeepSeek API 响应时间。");
+        setError("The request timed out. Check the server and DeepSeek API availability.");
       } else {
-        setError(requestError instanceof Error ? requestError.message : "请求失败");
+        setError(requestError instanceof Error ? requestError.message : "Request failed");
       }
     } finally {
       window.clearTimeout(timeout);
@@ -299,27 +305,27 @@ export function App() {
         onDeleteSession={deleteSession}
       />
 
-      <section className="conversation-panel" aria-label="调研助手对话">
+      <section className="conversation-panel" aria-label="Research assistant conversation">
         <header className="topbar">
           <div>
             <h1>Research Brief Agent</h1>
-            <p>把研究主题整理成可讨论的中文调研简报</p>
+            <p>Turn a research topic into an English brief for discussion</p>
           </div>
-          <div className="status-pill">{sessionId ? "会话进行中" : "新会话"}</div>
+          <div className="status-pill">{sessionId ? "Active session" : "New session"}</div>
         </header>
 
         <div className="message-list">
           {messages.length === 0 ? (
             <div className="empty-state">
               <FileText size={28} />
-              <span>输入一个研究主题，助手会收集资料、整理观点并生成简报。</span>
+              <span>Enter a topic to collect sources, synthesize evidence, and create a brief.</span>
             </div>
           ) : (
             messages.map((message) => (
               <article key={message.id} className={`message ${message.role}`}>
                 <div className="message-meta">
                   <time>{formatTime(message.createdAt)}</time>
-                  <span>{message.role === "user" ? "你" : "助手"}</span>
+                  <span>{message.role === "user" ? "You" : "Assistant"}</span>
                 </div>
                 <MessageContent message={message} />
               </article>
@@ -329,7 +335,7 @@ export function App() {
           {isLoading ? (
             <article className="thinking-message" aria-live="polite">
               <Loader2 className="spin" size={16} />
-              <span>正在思考...（{elapsedSeconds}秒）</span>
+              <span>Thinking... ({elapsedSeconds}s)</span>
             </article>
           ) : null}
 
@@ -342,51 +348,51 @@ export function App() {
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="例如：帮我研究 RAG 评估方法，整理成我能和组长讨论的版本。"
+            placeholder="For example: Research RAG evaluation methods for a discussion with my team lead."
             disabled={isLoading}
           />
-          <button type="submit" disabled={isLoading || !input.trim()} aria-label="发送消息">
+          <button type="submit" disabled={isLoading || !input.trim()} aria-label="Send message">
             {isLoading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
           </button>
         </form>
       </section>
 
-      <aside className="process-panel" aria-label="调研进度">
+      <aside className="process-panel" aria-label="Research progress">
         <div className="process-panel-header">
           <Brain size={20} />
-          <h2>调研进度</h2>
+          <h2>Research progress</h2>
         </div>
 
         <ResearchProgress events={currentTurnEvents} isLoading={isLoading} hasSessionHistory={researchEvents.length > 0} />
 
         <div className="process-panel-subheader">
           <Gauge size={18} />
-          <h2>上下文窗口</h2>
+          <h2>Context window</h2>
         </div>
 
         <ContextWindowStats compactState={compactState} />
 
         <div className="process-panel-subheader">
           <BookOpen size={18} />
-          <h2>调研资料</h2>
+          <h2>Research sources</h2>
         </div>
 
         <ResearchSources sources={researchSources} events={researchEvents} isLoading={isLoading} />
 
         <div className="process-panel-subheader">
           <FileText size={18} />
-          <h2>最近步骤</h2>
+          <h2>Recent steps</h2>
         </div>
 
         <div className="process-events">
           {latestResearchEvents.length === 0 ? (
-            <p className="muted">还没有开始调研。</p>
+            <p className="muted">Research has not started yet.</p>
           ) : (
             latestResearchEvents.map((event) => (
               <article className="process-event" key={event.id}>
                 <div className="process-row">
                   <strong>{event.stepLabel}</strong>
-                  <span className={`process-status ${event.status}`}>{event.status === "completed" ? "已完成" : "未完成"}</span>
+                  <span className={`process-status ${event.status}`}>{event.status === "completed" ? "Completed" : "Incomplete"}</span>
                 </div>
                 <div className="event-time">
                   {formatTime(event.startedAt)} - {formatTime(event.finishedAt)}
@@ -419,17 +425,17 @@ function SessionSidebar({
   onDeleteSession: (sessionId: string, event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <aside className="session-sidebar" aria-label="历史会话">
+    <aside className="session-sidebar" aria-label="Session history">
       <div className="session-sidebar-header">
-        <h2>会话</h2>
-        <button type="button" onClick={onNewSession} disabled={isLoading} aria-label="新建会话">
+        <h2>Sessions</h2>
+        <button type="button" onClick={onNewSession} disabled={isLoading} aria-label="Create session">
           <Plus size={16} />
         </button>
       </div>
 
       <div className="session-list">
         {sessions.length === 0 ? (
-          <p className="muted session-empty">暂无会话</p>
+          <p className="muted session-empty">No sessions yet</p>
         ) : (
           sessions.map((session) => (
             <div className={`session-item ${session.sessionId === activeSessionId ? "active" : ""}`} key={session.sessionId}>
@@ -450,7 +456,7 @@ function SessionSidebar({
                 className="session-delete"
                 onClick={(event) => onDeleteSession(session.sessionId, event)}
                 disabled={isLoading}
-                aria-label="删除会话"
+                aria-label="Delete session"
               >
                 <Trash2 size={14} />
               </button>
@@ -471,22 +477,22 @@ function ContextWindowStats({ compactState }: { compactState: CompactState | und
   const persistedCount = compactState?.persistedOutputs.length || 0;
 
   return (
-    <section className="context-section" aria-label="上下文窗口统计">
+    <section className="context-section" aria-label="Context window statistics">
       <div className="context-budget">
         <div className="context-budget-row">
-          <span>使用量</span>
+          <span>Usage</span>
           <strong>
             {formatNumber(estimatedTokens)} / {formatNumber(windowTokens)}
           </strong>
         </div>
-        <div className="context-bar" aria-label="上下文窗口占用">
+        <div className="context-bar" aria-label="Context window usage">
           <span style={{ width: `${Math.round(windowRatio * 100)}%` }} />
         </div>
         <div className="context-pill-row">
           <span>{Math.round(windowRatio * 100)}%</span>
-          <span>触发 {Math.round(triggerRatio * 100)}%</span>
-          <span>压缩 {compactState?.compactedMessageCount || 0}</span>
-          <span>输出 {persistedCount}</span>
+          <span>Threshold {Math.round(triggerRatio * 100)}%</span>
+          <span>Compacted {compactState?.compactedMessageCount || 0}</span>
+          <span>Outputs {persistedCount}</span>
         </div>
       </div>
     </section>
@@ -539,7 +545,7 @@ function MessageContent({ message }: { message: UiMessage }) {
 
 function InlineProgress({ events }: { events: ResearchToolEvent[] }) {
   return (
-    <div className="inline-progress" aria-label="当前调研步骤">
+    <div className="inline-progress" aria-label="Current research steps">
       {events.map((event) => (
         <span key={event.id} className={`inline-step ${event.status}`}>
           {event.status === "completed" ? <CheckCircle2 size={14} /> : <Circle size={14} />}
@@ -563,19 +569,19 @@ function ResearchProgress({
   const planState = getPlanState(events, isLoading);
 
   return (
-    <section className="progress-section" aria-label="调研流程">
+    <section className="progress-section" aria-label="Research workflow">
       <div className="plan-summary-row">
-        <span>本轮 Todo</span>
+        <span>Current tasks</span>
         <span className={`plan-state ${planState}`}>{planStateLabel(planState)}</span>
       </div>
       <p className="turn-plan-note">
         {isLoading
-          ? "当前轮次正在刷新。"
+          ? "Updating the current turn."
           : events.length > 0
-            ? "这里只显示最近一轮对话的任务步骤。"
+            ? "Showing the steps from the latest turn."
             : hasSessionHistory
-              ? "新一轮问题发送后会刷新这里，不沿用上一轮步骤。"
-              : "发送问题后会生成当前轮次的 todo list。"}
+              ? "Send another question to see the steps for the next turn."
+              : "Send a question to generate a task list."}
       </p>
       <ol className="research-step-list">
         {planItems.map((item) => {
@@ -607,14 +613,14 @@ function ResearchSources({
   const failedCollection = [...events].reverse().find((event) => event.toolName === "collect_sources" && event.status === "failed");
 
   return (
-    <section className="source-section" aria-label="调研资料">
+    <section className="source-section" aria-label="Research sources">
       {sources.length === 0 ? (
         <p className="muted">
           {failedCollection
-            ? `资料收集失败：${failedCollection.error || "未返回明确错误。"}`
+            ? `Source collection failed: ${failedCollection.error || "No error details were returned."}`
             : isLoading
-              ? "正在等待资料收集结果。"
-              : "还没有可展示的资料来源。"}
+              ? "Waiting for collected sources."
+              : "No sources to display yet."}
         </p>
       ) : (
         <div className="source-list">
@@ -626,7 +632,7 @@ function ResearchSources({
               </div>
               <div className="source-meta">
                 <span>{source.publisher}</span>
-                <span>{source.sourceType === "papers" ? "论文" : "网页"}</span>
+                <span>{source.sourceType === "papers" ? "Paper" : "Web"}</span>
               </div>
             </a>
           ))}
@@ -651,8 +657,8 @@ function buildTaskPlanItems(events: ResearchToolEvent[], isLoading: boolean): Ta
     return [
       {
         id: "planning",
-        label: isLoading ? "规划本轮 todo" : "等待新一轮输入",
-        detail: isLoading ? "正在为当前问题判断需要收集、整理还是生成简报。" : "发送问题后会显示当前轮次的任务步骤。",
+        label: isLoading ? "Plan this turn" : "Waiting for a new question",
+        detail: isLoading ? "Deciding whether to collect sources, synthesize evidence, or write a brief." : "Send a question to see the current steps.",
         status: isLoading ? "in-progress" : "pending"
       }
     ];
@@ -660,7 +666,7 @@ function buildTaskPlanItems(events: ResearchToolEvent[], isLoading: boolean): Ta
 
   const items: TaskPlanItem[] = events.map((event, index) => ({
     id: event.id,
-    label: `第 ${index + 1} 步：${event.stepLabel}`,
+    label: `Step ${index + 1}: ${event.stepLabel}`,
     detail: summarizeEventForUi(event),
     status: event.status === "completed" ? "completed" : "failed"
   }));
@@ -669,8 +675,8 @@ function buildTaskPlanItems(events: ResearchToolEvent[], isLoading: boolean): Ta
   if (isLoading && lastEvent?.status !== "failed") {
     items.push({
       id: "next-decision",
-      label: "判断本轮下一步",
-      detail: "正在判断当前轮次资料是否足够，或是否需要继续整理、生成简报。",
+      label: "Determine the next step",
+      detail: "Checking whether the evidence is sufficient or further synthesis is needed.",
       status: "in-progress"
     });
   }
@@ -678,8 +684,8 @@ function buildTaskPlanItems(events: ResearchToolEvent[], isLoading: boolean): Ta
   if (!isLoading && lastEvent?.status === "completed") {
     items.push({
       id: "plan-completed",
-      label: "本轮 todo 完成",
-      detail: "当前轮次流程已经结束，最终回答已同步到聊天区。",
+      label: "Tasks completed",
+      detail: "This turn is complete. The final answer is available in the conversation.",
       status: "completed"
     });
   }
@@ -701,18 +707,18 @@ function getPlanState(events: ResearchToolEvent[], isLoading: boolean): PlanStat
 
 function planStateLabel(state: PlanState) {
   if (state === "completed") {
-    return "已完成";
+    return "Completed";
   }
 
   if (state === "failed") {
-    return "有失败";
+    return "Failed";
   }
 
   if (state === "running") {
-    return "进行中";
+    return "In progress";
   }
 
-  return "未开始";
+  return "Not started";
 }
 
 function StepIcon({ status }: { status: PlanStepStatus }) {
@@ -739,20 +745,20 @@ function ReasoningPanel({ reasoning }: { reasoning: ReasoningSummary }) {
           <ChevronDown size={14} />
           {reasoning.title}
         </span>
-        <small>{reasoning.steps.length} 个步骤</small>
+        <small>{reasoning.steps.length} steps</small>
       </summary>
       <div className="reasoning-content">
         <ul>
           {reasoning.steps.map((step) => (
             <li key={step.index}>
               <div>
-                第 {step.index} 步：{step.label}
+                Step {step.index}: {step.label}
               </div>
-              <div>结果：{step.result}</div>
+              <div>Result: {step.result}</div>
             </li>
           ))}
         </ul>
-        <p>总结：{reasoning.summary}</p>
+        <p>Summary: {reasoning.summary}</p>
       </div>
     </details>
   );
@@ -760,38 +766,38 @@ function ReasoningPanel({ reasoning }: { reasoning: ReasoningSummary }) {
 
 function summarizeEventForUi(event: ResearchToolEvent) {
   if (event.status === "failed") {
-    return event.error || "步骤未完成。";
+    return event.error || "The step did not complete.";
   }
 
   const parsed = safeParseJson(event.output);
   if (typeof parsed?.sourceCount === "number") {
-    return `整理出 ${parsed.sourceCount} 条候选资料。`;
+    return `Collected ${parsed.sourceCount} candidate sources.`;
   }
 
   if (Array.isArray(parsed?.keyFindings)) {
     if (parsed?.coverage && typeof parsed.coverage.coverageScore === "number") {
       const missing = Array.isArray(parsed.coverage.missingAspects) ? parsed.coverage.missingAspects : [];
-      return `形成 ${parsed.keyFindings.length} 条关键发现，覆盖率 ${Math.round(parsed.coverage.coverageScore * 100)}%${
-        missing.length > 0 ? `，仍缺：${missing.join("、")}` : "。"
+      return `Identified ${parsed.keyFindings.length} key findings, coverage ${Math.round(parsed.coverage.coverageScore * 100)}%${
+        missing.length > 0 ? `, missing: ${missing.join(", ")}` : "."
       }`;
     }
 
-    return `形成 ${parsed.keyFindings.length} 条关键发现。`;
+    return `Identified ${parsed.keyFindings.length} key findings.`;
   }
 
   if (parsed?.sources) {
-    return `整理出 ${parsed.sources.length} 条候选资料。`;
+    return `Collected ${parsed.sources.length} candidate sources.`;
   }
 
   if (parsed?.synthesis) {
-    return `形成 ${parsed.synthesis.keyFindings?.length ?? 0} 条关键发现。`;
+    return `Identified ${parsed.synthesis.keyFindings?.length ?? 0} key findings.`;
   }
 
   if (parsed?.brief) {
-    return `已生成《${parsed.brief.title ?? "调研简报"}》。`;
+    return `Created "${parsed.brief.title ?? "Research brief"}".`;
   }
 
-  return "步骤已完成。";
+  return "Step completed.";
 }
 
 function extractResearchSources(events: ResearchToolEvent[]): ResearchSourcePreview[] {
@@ -847,7 +853,7 @@ function safeParseJson(value: string | undefined): any {
 }
 
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit"
@@ -855,7 +861,7 @@ function formatTime(value: string) {
 }
 
 function formatSessionTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -864,7 +870,7 @@ function formatSessionTime(value: string) {
 }
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0
   }).format(value);
 }

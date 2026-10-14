@@ -13,7 +13,7 @@ const evidenceSynthesizerSchema = z.object({
 
     const trimmed = value.trim();
     return trimmed ? trimmed : undefined;
-  }, z.string().min(1).max(200).default("基于已收集资料的综合分析")),
+  }, z.string().min(1).max(200).default("Synthesis of collected sources")),
   outputFormat: outputFormatSchema.default("decision_brief")
 });
 
@@ -31,44 +31,44 @@ const MEMORY_FRAMEWORK_PROFILES: MemoryFrameworkProfile[] = [
   {
     name: "Mem0",
     aliases: ["Mem0"],
-    position: "轻量语义记忆层 / memory API",
-    bestFor: "快速接入用户偏好、事实和对话记忆，适合作为应用外置 memory 层做 POC",
-    verify: "验证召回质量、写入策略、删除能力、多租户隔离和长期存储成本"
+    position: "Lightweight semantic memory layer / memory API",
+    bestFor: "Prototype external memory for user preferences, facts, and conversations",
+    verify: "Validate recall, write policies, deletion, tenant isolation, and long-term storage costs"
   },
   {
     name: "Letta/MemGPT",
     aliases: ["Letta", "MemGPT"],
-    position: "虚拟上下文和显式记忆管理框架",
-    bestFor: "需要 agent 主动管理上下文、长期状态和工具调用边界的复杂任务",
-    verify: "验证上下文换入换出策略、开发复杂度、运行延迟和可观测性"
+    position: "Virtual context and explicit memory management",
+    bestFor: "Complex tasks requiring explicit control of context, long-term state, and tools",
+    verify: "Validate context paging, development complexity, latency, and observability"
   },
   {
     name: "Zep",
     aliases: ["Zep"],
-    position: "会话历史持久化和知识图谱记忆服务",
-    bestFor: "对话型产品需要跨会话记忆、实体关系和历史检索时优先评估",
-    verify: "验证实体抽取质量、图谱维护成本、隐私删除和与现有检索链路的集成成本"
+    position: "Conversation persistence and graph-based memory",
+    bestFor: "Evaluate for cross-session memory, entity relationships, and conversation retrieval",
+    verify: "Validate entity extraction, graph maintenance, privacy deletion, and retrieval integration"
   },
   {
     name: "LangGraph Memory",
     aliases: ["LangGraph"],
-    position: "图式 agent 的 checkpoint/store 状态管理",
-    bestFor: "已经使用 LangGraph 编排 agent，需要把短期状态、长期 store 和恢复能力纳入同一工程体系",
-    verify: "验证状态边界、checkpoint 存储、回放调试、并发写入和迁移成本"
+    position: "Checkpoint and store state management for graph-based agents",
+    bestFor: "Applications using LangGraph that need short-term state, long-term storage, and recovery",
+    verify: "Validate state boundaries, checkpoint storage, replay, concurrent writes, and migration costs"
   },
   {
     name: "CrewAI Memory",
     aliases: ["CrewAI"],
-    position: "多 agent 任务编排中的内置记忆能力",
-    bestFor: "CrewAI 多角色任务流中需要复用执行历史和 agent 偏好时可作为低成本候选",
-    verify: "验证跨 agent 记忆污染、任务隔离、可控删除和是否能脱离 CrewAI 生态"
+    position: "Integrated memory for multi-agent workflows",
+    bestFor: "Evaluate for reusing execution history and agent preferences in CrewAI workflows",
+    verify: "Validate cross-agent contamination, task isolation, deletion, and framework dependencies"
   },
   {
-    name: "自研轻量记忆层",
-    aliases: ["custom memory", "自研"],
-    position: "基于数据库、向量库、规则和审计日志组合的定制方案",
-    bestFor: "对隐私、审计、权限、删除和成本控制要求高，现成框架难以满足约束时",
-    verify: "验证工程维护成本、评估体系、schema 演进、回滚机制和长期治理投入"
+    name: "Custom lightweight memory layer",
+    aliases: ["custom memory", "custom"],
+    position: "Custom memory built from databases, vector stores, rules, and audit logs",
+    bestFor: "Use when existing frameworks do not meet privacy, audit, access, deletion, or cost requirements",
+    verify: "Validate maintenance, evaluation, schema evolution, rollback, and governance costs"
   }
 ];
 
@@ -77,7 +77,7 @@ export const evidenceSynthesizerDefinition: DeepSeekToolDefinition = {
   function: {
     name: "evidence_synthesizer",
     description:
-      "把 source_collector 收集到的资料整理成核心观点、对比维度、风险限制和初步建议。必须在完成资料收集后使用。",
+      "Organize collected sources into findings, comparison dimensions, limitations, and initial recommendations. Use after source collection.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -86,11 +86,11 @@ export const evidenceSynthesizerDefinition: DeepSeekToolDefinition = {
         focus: {
           type: "string",
           description:
-            "可选。本次综合分析的关注点，例如“面向组长讨论的 RAG 评估方案”。不传时后端会使用用户原始调研目标。不要传 sources，后端会自动使用 source_collector 的结果。"
+            "Optional focus, such as RAG evaluation for a team discussion. The server supplies the user goal and collected sources when omitted."
         },
         outputFormat: {
           type: "string",
-          description: "可选。输出结构类型，只能是 comparison、summary、pros_cons、decision_brief；默认 decision_brief。",
+          description: "Optional output format: comparison, summary, pros_cons, or decision_brief. Defaults to decision_brief.",
           enum: ["comparison", "summary", "pros_cons", "decision_brief"],
           default: "decision_brief"
         }
@@ -102,6 +102,7 @@ export const evidenceSynthesizerDefinition: DeepSeekToolDefinition = {
 export async function runEvidenceSynthesizer(args: unknown): Promise<ToolExecutionResult> {
   const input = parseToolInput(evidenceSynthesizerSchema, args, "evidence_synthesizer");
   const synthesis = buildSynthesis(input);
+  synthesis.references = input.sources.map(({ title, url }) => ({ title, url }));
 
   return {
     output: JSON.stringify({ synthesis }, null, 2)
@@ -122,37 +123,37 @@ function buildGeneralSynthesis(
     evidenceGaps: inferEvidenceGaps(input),
     outputFormat: input.outputFormat,
     keyFindings: [
-      `资料共同指向一个前提：讨论“${input.focus}”时，需要先明确问题边界、使用场景和采用标准，再比较不同方案。`,
-      `候选资料覆盖 ${sourceTypes}，可以支撑概念理解、代表方法梳理、方案对比和落地风险判断。`,
-      `高相关资料包括：${topSources.map((source) => source.title).join("；")}。`
+      `Planning guidance for "${input.focus}": clarify scope, use cases, and adoption criteria before comparing approaches.`,
+      `Collected source types: ${sourceTypes}. Review them for concepts, methods, comparisons, and implementation risks.`,
+      `Highly ranked sources: ${topSources.map((source) => source.title).join("; ")}.`
     ],
     comparisons: [
       {
-        dimension: "核心概念",
-        notes: "先确认主题中的关键术语、边界和适用场景，避免把不同层次的问题混在一起。"
+        dimension: "Core concepts",
+        notes: "Define terminology, scope, and use cases before combining findings from different levels."
       },
       {
-        dimension: "主要方法",
-        notes: "把资料中的代表性方法、框架或实践路径拆开比较，重点看它们解决的问题和依赖条件。"
+        dimension: "Main methods",
+        notes: "Compare representative methods, frameworks, and workflows by the problems they address and their prerequisites."
       },
       {
-        dimension: "落地取舍",
-        notes: "越贴近真实使用场景，结论越可用，但集成成本、维护成本和验证成本也会更高。"
+        dimension: "Implementation trade-offs",
+        notes: "Representative use cases improve relevance but increase integration, maintenance, and validation costs."
       }
     ],
     risksOrLimitations: [
-      "当前综合结果依赖外部 API 返回的标题和摘要，正式引用前仍需要核对原文，尤其要注意标题相关但正文可能并不完全覆盖用户关心的问题。",
-      "如果主题涉及快速变化的技术，需要后续接入更多资料源并记录出处，避免只依赖单一来源。",
-      "当前结论适合作为讨论起点，不应直接替代真实项目中的验证、试用和团队约束评估。"
+      "This synthesis uses API titles and abstracts. Check the full source before citing it; a relevant title does not establish complete support for the research question.",
+      "For rapidly changing technology, expand the source set and record references.",
+      "Use the findings as a discussion starting point and validate them against project requirements."
     ],
     recommendation:
-      "建议先把主题拆成“概念边界、代表方案、适用场景、成本风险、下一步验证”五个部分，形成小而可执行的讨论框架，再根据缺口继续补资料。"
+      "Organize discussion around concepts, candidate approaches, use cases, cost and risk, and next validation steps. Collect more evidence for identified gaps."
   };
 }
 
 function buildSynthesis(input: EvidenceSynthesizerInput): ResearchSynthesis {
   const topSources = [...input.sources].sort((left, right) => right.relevanceScore - left.relevanceScore).slice(0, 3);
-  const sourceTypes = [...new Set(input.sources.map((source) => source.sourceType))].join("、");
+  const sourceTypes = [...new Set(input.sources.map((source) => source.sourceType))].join(", ");
   if (isMemoryTopic(input.focus)) {
     return buildMemoryFrameworkSynthesis(input, topSources, sourceTypes);
   }
@@ -162,53 +163,7 @@ function buildSynthesis(input: EvidenceSynthesizerInput): ResearchSynthesis {
   }
 
   return buildGeneralSynthesis(input, topSources, sourceTypes);
-  /*
-  return {
-    focus: input.focus,
-    researchQuestion: "如何为 RAG 系统建立可落地、可复核、能支持团队决策的评估体系？",
-    decisionContext: "用于选择评估框架、设计评估指标、确定数据集和落地验证流程。",
-    evaluationCriteria: [
-      "答案忠实度和幻觉率",
-      "上下文相关性、context precision 和 context recall",
-      "检索召回、排序质量和覆盖率",
-      "端到端任务成功率",
-      "人工复核一致性、评估成本和延迟"
-    ],
-    evidenceRequirements: [
-      "至少覆盖指标定义、框架对比和 benchmark 数据集",
-      "说明自动化评估与人工评估的适用边界",
-      "给出小样本验证流程，而不是只给概念建议"
-    ],
-    evidenceGaps: inferEvidenceGaps(input),
-    outputFormat: input.outputFormat,
-    keyFindings: [
-      `资料共同指向一个前提：讨论“${input.focus}”时，需要先明确评估目标，再选择指标和样本。`,
-      `候选资料覆盖 ${sourceTypes}，可以同时支撑概念理解、方案对比和落地判断。`,
-      `高相关资料包括：${topSources.map((source) => source.title).join("；")}。`
-    ],
-    comparisons: [
-      {
-        dimension: "评估目标",
-        notes: "先区分质量评估、效率评估、成本评估和业务适配度，否则指标容易混在一起。"
-      },
-      {
-        dimension: "证据来源",
-        notes: "公开资料适合补充实践案例，论文适合补充方法论和评估框架。"
-      },
-      {
-        dimension: "落地成本",
-        notes: "越贴近真实业务样本，结论越可用，但数据整理、人工标注和复核成本也会更高。"
-      }
-    ],
-    risksOrLimitations: [
-      "当前综合结果依赖外部 API 返回的标题和摘要，仍需要在正式引用前核对原文。",
-      "如果主题涉及快速变化的技术，需要后续接入更多资料源并记录出处。",
-      "评估结论容易受样本规模、任务类型和判断标准影响，需要在实际项目中复核。"
-    ],
-    recommendation:
-      "建议先形成一个小而可执行的评估框架：明确目标、挑选代表性样本、设计少量关键指标，再用人工复核校准自动化评估结果。"
-  };
-  */
+
 }
 
 function buildMemoryFrameworkSynthesis(
@@ -239,59 +194,59 @@ function buildMemoryFrameworkSynthesis(
   ]);
   const frameworkText = renderMemoryFrameworkCoverage(mentionedFrameworks);
   const frameworkRows = buildMemoryFrameworkRows(mentionedFrameworks);
-  const memoryTypeText = memoryTypes.length > 0 ? memoryTypes.join("、") : "短期/工作记忆、长期语义记忆、事件记忆、程序性记忆";
+  const memoryTypeText = memoryTypes.length > 0 ? memoryTypes.join(", ") : "short-term/working memory, long-term semantic memory, episodic memory, and procedural memory";
   const metricText =
     metrics.length > 0
-      ? metrics.join("、")
-      : "命中率、召回质量、检索/写入延迟、token 成本、存储成本、隐私和记忆污染风险";
+      ? metrics.join(", ")
+      : "hit rate, recall, retrieval/write latency, token and storage costs, privacy, and contamination risk";
 
   return {
     focus: input.focus,
-    researchQuestion: "应该如何选择或设计 agent/LLM 记忆框架，才能在效果、成本、延迟和安全性之间取得可验证的平衡？",
-    decisionContext: "用于选型 memory 框架、设计记忆模块，或规划 memory benchmark / POC。",
+    researchQuestion: "How should an agent/LLM memory framework be selected or designed to balance effectiveness, cost, latency, and safety with measurable evidence?",
+    decisionContext: "Select a memory framework, design a memory module, or plan a memory benchmark or proof of concept.",
     evaluationCriteria: [
-      "记忆命中率和召回质量",
-      "记忆过期、遗忘和冲突解决策略",
-      "检索延迟、写入延迟和端到端 latency",
-      "token 成本、存储成本和索引维护成本",
-      "个性化效果和用户满意度提升",
-      "隐私、权限、可删除性和记忆污染率"
+      "Memory hit rate and retrieval quality",
+      "Memory expiration, forgetting, and conflict resolution",
+      "Retrieval, write, and end-to-end latency",
+      "Token, storage, and index maintenance costs",
+      "Personalization and user satisfaction gains",
+      "Privacy, permissions, deletion, and memory contamination rate"
     ],
     evidenceRequirements: [
-      "需要至少一个候选框架/方法对比表",
-      "需要提出可执行的 POC 实验设计和指标采集方式",
-      "需要区分短期上下文、长期语义记忆、事件记忆和程序性记忆"
+      "Include at least one comparison of candidate frameworks or methods",
+      "Propose an executable proof-of-concept experiment and metric collection method",
+      "Distinguish short-term context, long-term semantic memory, episodic memory, and procedural memory"
     ],
     evidenceGaps: inferEvidenceGaps(input),
     outputFormat: input.outputFormat,
     keyFindings: [
-      `长上下文记忆选型不能等同于 RAG 评估；应先区分记忆层次：${memoryTypeText}，再决定哪些能力由上下文窗口、向量检索、知识图谱或显式状态管理承担。`,
-      `候选框架不能只停在已命中的少数名字；本轮至少应把 Mem0、Letta/MemGPT、Zep、LangGraph Memory、CrewAI Memory 和自研轻量记忆层放进同一张筛选表。${frameworkText}`,
-      `可量化评估应围绕：${metricText}。没有这些指标时，结论只能作为初筛，不能直接作为选型依据。`,
-      `候选资料覆盖 ${sourceTypes}，代表资料包括：${topSources.map((source) => source.title).join("；")}。`
+      `Planning guidance: distinguish ${memoryTypeText}, then decide what belongs in context, vector retrieval, a knowledge graph, or explicit state management. Memory selection requires its own evaluation.`,
+      `Candidate screening guide: compare Mem0, Letta/MemGPT, Zep, LangGraph Memory, CrewAI Memory, and a custom memory layer. ${frameworkText}`,
+      `Evaluation guidance: measure ${metricText}. Without measurements, conclusions remain preliminary.`,
+      `Collected ${sourceTypes} sources, including ${topSources.map((source) => source.title).join("; ")}.`
     ],
     comparisons: [
       {
-        dimension: "记忆层次",
-        notes: "短期上下文适合当前任务连续性；语义记忆适合事实和偏好；事件记忆适合历史交互；程序性记忆适合稳定流程和工具使用习惯。"
+        dimension: "Memory levels",
+        notes: "Working context supports task continuity; semantic memory stores facts and preferences; episodic memory records interactions; procedural memory represents workflows."
       },
       ...frameworkRows,
       {
-        dimension: "评估指标",
-        notes: `${metricText}。建议把效果指标和工程指标分开采集，避免只凭演示效果判断长期可用性。`
+        dimension: "Evaluation metrics",
+        notes: `${metricText}. Collect effectiveness and engineering metrics separately when judging long-term suitability.`
       },
       {
-        dimension: "风险治理",
-        notes: "重点检查记忆污染、过期信息、隐私权限、跨用户泄漏、不可删除和长期成本膨胀。"
+        dimension: "Risk governance",
+        notes: "Check contamination, stale information, privacy, cross-user leakage, deletion, and long-term cost growth."
       }
     ],
     risksOrLimitations: [
-      "当前资料多来自外部 API 的标题和摘要，正式选型前需要打开原文核对具体实现、许可、维护状态和 benchmark 口径。",
-      "记忆框架的公开 benchmark 往往不能直接代表业务效果，需要用真实任务样本做 POC。",
-      "长期记忆会引入隐私、权限、过期和污染问题；如果没有删除、审计和隔离机制，效果提升可能被治理风险抵消。"
+      "Before selection, verify full-source implementation details, licenses, maintenance status, and benchmark definitions.",
+      "Public benchmarks require validation on representative application tasks.",
+      "Long-term memory needs privacy, access, expiration, contamination, deletion, audit, and isolation controls."
     ],
     recommendation:
-      "建议先做一轮小范围 POC：选 2 到 3 个候选框架，固定同一批多轮任务样本，分别记录记忆命中率、召回质量、延迟、写入成本、删除能力和污染率，再基于指标做取舍。"
+      "Run a small proof of concept with two or three candidates on the same multi-turn tasks. Record hit rate, recall, latency, write cost, deletion, and contamination before comparing results."
   };
 }
 
@@ -310,8 +265,8 @@ function renderMemoryFrameworkCoverage(mentionedFrameworks: Set<string>): string
   const missing = allFrameworks.filter((name) => !mentionedFrameworks.has(name));
 
   return [
-    mentioned.length > 0 ? `当前资料摘要已命中：${mentioned.join("、")}。` : "当前资料摘要没有稳定命中具体候选框架。",
-    missing.length > 0 ? `仍需补官方文档或 benchmark 核对：${missing.join("、")}。` : ""
+    mentioned.length > 0 ? `Mentioned in collected abstracts: ${mentioned.join(", ")}.` : "Collected abstracts do not identify specific candidate frameworks.",
+    missing.length > 0 ? `Verify with official documentation or benchmarks: ${missing.join(", ")}.` : ""
   ]
     .filter(Boolean)
     .join("");
@@ -322,10 +277,10 @@ function buildMemoryFrameworkRows(mentionedFrameworks: Set<string>): Array<{ dim
     dimension: profile.name,
     notes: [
       profile.position,
-      `适用：${profile.bestFor}`,
-      `验证：${profile.verify}`,
-      mentionedFrameworks.has(profile.name) ? "证据状态：本轮资料摘要已命中。" : "证据状态：本轮资料摘要未命中，需补官方文档或 benchmark。"
-    ].join("；")
+      `Candidate use case: ${profile.bestFor}`,
+      `Validate: ${profile.verify}`,
+      mentionedFrameworks.has(profile.name) ? "Evidence status: named in collected abstracts; suitability still requires verification." : "Evidence status: absent from collected abstracts; obtain official documentation or benchmarks."
+    ].join("; ")
   }));
 }
 
@@ -347,63 +302,63 @@ function buildRagEvaluationSynthesis(
   ]);
   const frameworks = findKnownTerms(evidenceText, ["RAGAS", "TruLens", "ARES", "DeepEval", "LangSmith"]);
   const datasets = findKnownTerms(evidenceText, ["RGB", "CRUD", "KILT", "Natural Questions", "HotpotQA", "MS MARCO"]);
-  const metricText = metrics.length > 0 ? metrics.join("、") : "当前资料摘要未明确列出具体指标，需要后续核对原文补充";
-  const frameworkText = frameworks.length > 0 ? frameworks.join("、") : "当前资料摘要未充分覆盖主流框架对比";
-  const datasetText = datasets.length > 0 ? datasets.join("、") : "当前资料摘要未充分覆盖数据集或 benchmark";
+  const metricText = metrics.length > 0 ? metrics.join(", ") : "specific metrics are not identified in the abstracts; consult full sources";
+  const frameworkText = frameworks.length > 0 ? frameworks.join(", ") : "framework comparison is not sufficiently covered in the abstracts";
+  const datasetText = datasets.length > 0 ? datasets.join(", ") : "datasets or benchmarks are not sufficiently covered in the abstracts";
 
   return {
     focus: input.focus,
-    researchQuestion: "如何为 RAG 系统建立可落地、可复核、能支持团队决策的评估体系？",
-    decisionContext: "用于选择评估框架、设计评估指标、确定数据集和落地验证流程。",
+    researchQuestion: "How can a RAG evaluation system be implemented and reviewed to support team decisions?",
+    decisionContext: "Select an evaluation framework, define metrics, choose datasets, and establish validation workflows.",
     evaluationCriteria: [
-      "答案忠实度和幻觉率",
-      "上下文相关性、context precision 和 context recall",
-      "检索召回、排序质量和覆盖率",
-      "端到端任务成功率",
-      "人工复核一致性、评估成本和延迟"
+      "Answer faithfulness and hallucination rate",
+      "Context relevance, precision, and recall",
+      "Retrieval recall, ranking quality, and coverage",
+      "End-to-end task success rate",
+      "Human review agreement, evaluation cost, and latency"
     ],
     evidenceRequirements: [
-      "至少覆盖指标定义、框架对比和 benchmark 数据集",
-      "说明自动化评估与人工评估的适用边界",
-      "给出小样本验证流程，而不是只给概念建议"
+      "Cover metric definitions, framework comparisons, and benchmark datasets",
+      "Explain the scope of automated and human evaluation",
+      "Provide a small-sample validation workflow"
     ],
     evidenceGaps: inferEvidenceGaps(input),
     outputFormat: input.outputFormat,
     keyFindings: [
-      `RAG 评估应拆成三个层次：检索质量、生成质量和端到端任务效果，避免把所有指标混成一个总分。`,
-      `资料中已经出现的关键指标线索包括：${metricText}。这些指标分别对应答案忠实度、答案相关性和上下文检索质量。`,
-      `资料中已经出现的评估框架线索包括：${frameworkText}。框架选择应结合是否需要自动化评估、链路追踪、人工复核和生产监控。`,
-      `候选资料覆盖 ${sourceTypes}，代表资料包括：${topSources.map((source) => source.title).join("；")}。`
+      `Evaluation guidance: assess retrieval quality, generation quality, and end-to-end task outcomes separately.`,
+      `Metric terms identified in the sources: ${metricText}. Validate their definitions against full sources.`,
+      `Framework terms identified in the sources: ${frameworkText}. Compare automated evaluation, tracing, human review, and monitoring needs.`,
+      `Collected ${sourceTypes} sources, including ${topSources.map((source) => source.title).join("; ")}.`
     ],
     comparisons: [
       {
-        dimension: "评估层次",
-        notes: "检索质量看召回内容是否相关且完整；生成质量看答案是否忠实、相关、无幻觉；端到端质量看用户任务是否真正完成。"
+        dimension: "Evaluation levels",
+        notes: "Evaluate retrieval relevance and completeness, answer faithfulness and relevance, and end-to-end task completion."
       },
       {
-        dimension: "关键指标",
-        notes: `${metricText}。建议先选 3 到 5 个核心指标做小样本验证，再扩大到自动化评估。`
+        dimension: "Key metrics",
+        notes: `${metricText}. Start with three to five metrics on a small sample, then expand automated evaluation.`
       },
       {
-        dimension: "框架选择",
-        notes: `${frameworkText}。RAGAS 更适合快速建立指标基线；TruLens 和 LangSmith 更偏链路观测；ARES、DeepEval 可用于更系统的评测流程。`
+        dimension: "Framework selection",
+        notes: `${frameworkText}. Verify current framework capabilities against metric, tracing, and evaluation workflow requirements.`
       },
       {
-        dimension: "数据集和基准",
-        notes: `${datasetText}。如果目标是企业内部落地，公开 benchmark 只能提供参考，还需要构造贴近业务的代表性样本。`
+        dimension: "Datasets and benchmarks",
+        notes: `${datasetText}. Supplement public benchmarks with representative internal task samples.`
       },
       {
-        dimension: "落地流程",
-        notes: "先明确业务问题和失败类型，再抽样构建评测集；用人工复核校准自动化指标，最后纳入持续监控。"
+        dimension: "Implementation workflow",
+        notes: "Identify the business problem and failure types, build a sample evaluation set, calibrate automated metrics with human review, and monitor continuously."
       }
     ],
     risksOrLimitations: [
-      "当前资料主要来自外部 API 返回的标题和摘要，正式引用前需要打开原文核对指标定义、实验设置和适用范围。",
-      "RAG 评估高度依赖业务场景；公开数据集或通用框架不能直接替代内部样本和人工判断标准。",
-      "自动化指标可能误判答案质量，尤其是长答案、多跳推理和领域知识问题，需要保留人工抽检。"
+      "Sources are API titles and abstracts. Check full-text metric definitions, experiment settings, and scope before citing.",
+      "RAG evaluation depends on the application. Validate public datasets and frameworks against internal examples and human criteria.",
+      "Retain human spot checks for automated metrics, especially for long answers, multi-hop reasoning, and domain knowledge."
     ],
     recommendation:
-      "建议先建立一个小而可执行的 RAG 评估框架和验证闭环：选定代表性问题集，分别评估检索质量、生成忠实度和端到端可用性，再用人工复核校准 RAGAS/DeepEval 等自动化结果。"
+      "Build a small RAG evaluation workflow with representative questions, separate retrieval and generation metrics, and human review of automated results."
   };
 }
 
@@ -412,53 +367,53 @@ function isRagEvaluationTopic(input: EvidenceSynthesizerInput): boolean {
     return false;
   }
 
-  return /rag|retrieval augmented generation|检索增强|ragas|trulens|deepeval|langsmith/i.test(input.focus);
+  return /rag|retrieval augmented generation|ragas|trulens|deepeval|langsmith/i.test(input.focus);
 }
 
 function inferResearchQuestion(focus: string): string {
   if (isMemoryTopic(focus)) {
-    return "应该如何选择或设计 agent/LLM 记忆框架，才能在效果、成本、延迟和安全性之间取得可验证的平衡？";
+    return "How should an agent/LLM memory framework be selected or designed to balance effectiveness, cost, latency, and safety with measurable evidence?";
   }
 
-  return `围绕“${focus}”，当前最需要支持的是选型、方案设计、benchmark，还是学习决策？`;
+  return `For "${focus}", should the research support selection, system design, benchmarking, or learning?`;
 }
 
 function inferDecisionContext(focus: string): string {
   if (isMemoryTopic(focus)) {
-    return "用于选型 memory 框架、设计记忆模块，或规划 memory benchmark / POC。";
+    return "Select a memory framework, design a memory module, or plan a memory benchmark or proof of concept.";
   }
 
-  return "用于把资料整理成可讨论、可验证、能支持下一步行动的调研判断。";
+  return "Organize sources into findings that can be discussed, verified, and used to plan next steps.";
 }
 
 function inferEvaluationCriteria(focus: string): string[] {
   if (isMemoryTopic(focus)) {
     return [
-      "记忆命中率和召回质量",
-      "记忆过期、遗忘和冲突解决策略",
-      "检索延迟、写入延迟和端到端 latency",
-      "token 成本、存储成本和索引维护成本",
-      "个性化效果和用户满意度提升",
-      "隐私、权限、可删除性和记忆污染率"
+      "Memory hit rate and retrieval quality",
+      "Memory expiration, forgetting, and conflict resolution",
+      "Retrieval, write, and end-to-end latency",
+      "Token, storage, and index maintenance costs",
+      "Personalization and user satisfaction gains",
+      "Privacy, permissions, deletion, and memory contamination rate"
     ];
   }
 
-  return ["效果指标", "成本指标", "延迟或效率指标", "可维护性", "风险和适用边界"];
+  return ["Effectiveness metrics", "Cost metrics", "Latency or efficiency metrics", "Maintainability", "Risks and scope"];
 }
 
 function inferEvidenceRequirements(focus: string): string[] {
   if (isMemoryTopic(focus)) {
     return [
-      "需要至少一个候选框架/方法对比表",
-      "需要提出可执行的 POC 实验设计和指标采集方式",
-      "需要区分短期上下文、长期语义记忆、事件记忆和程序性记忆"
+      "Include at least one comparison of candidate frameworks or methods",
+      "Propose an executable proof-of-concept experiment and metric collection method",
+      "Distinguish short-term context, long-term semantic memory, episodic memory, and procedural memory"
     ];
   }
 
   return [
-    "需要区分资料证据、推断和建议",
-    "需要指出是否有实验、benchmark 或真实案例支撑",
-    "如果没有数据，必须明确说明数据缺口和下一步验证方式"
+    "Distinguish source evidence, inference, and recommendations",
+    "State whether experiments, benchmarks, or real cases support the findings",
+    "If data is unavailable, explain the gap and the next validation step"
   ];
 }
 
@@ -466,21 +421,21 @@ function inferEvidenceGaps(input: EvidenceSynthesizerInput): string[] {
   const text = buildEvidenceText(input.sources).toLowerCase();
   const gaps: string[] = [];
 
-  if (!/experiment|benchmark|dataset|evaluation|metric|实验|基准|数据集|指标/.test(text)) {
-    gaps.push("当前资料更偏概念和方法介绍，缺少实验、benchmark 或量化指标。");
+  if (!/experiment|benchmark|dataset|evaluation|metric/.test(text)) {
+    gaps.push("The sources emphasize concepts and methods without clear experiments, benchmarks, or quantitative metrics.");
   }
-  if (isMemoryTopic(input.focus) && !/hit rate|latency|token|cost|personalization|privacy|过期|延迟|成本|个性化|隐私/.test(text)) {
-    gaps.push("当前资料未充分覆盖记忆命中率、过期策略、延迟、token 成本、个性化效果等 memory 评估指标。");
+  if (isMemoryTopic(input.focus) && !/hit rate|latency|token|cost|personalization|privacy/.test(text)) {
+    gaps.push("The sources do not sufficiently cover memory hit rate, expiration, latency, token cost, or personalization metrics.");
   }
   if (input.sources.length < 3) {
-    gaps.push("候选资料数量较少，结论应作为初步判断，后续需要补充更多来源。");
+    gaps.push("Few candidate sources are available; treat conclusions as preliminary and collect more evidence.");
   }
 
-  return gaps.length > 0 ? gaps : ["当前资料仍主要来自标题和摘要，正式决策前需要核对原文和实验设置。"];
+  return gaps.length > 0 ? gaps : ["Verify full sources and experiment settings before making a decision based on titles and abstracts."];
 }
 
 function isMemoryTopic(value: string): boolean {
-  return /memory|memgpt|mem0|letta|zep|long[-\s]?term|记忆|长期记忆|记忆框架|上下文记忆/i.test(value);
+  return /memory|memgpt|mem0|letta|zep|long[-\s]?term/i.test(value);
 }
 
 function buildEvidenceText(sources: EvidenceSynthesizerInput["sources"]): string {

@@ -63,7 +63,7 @@ export class SkillLoader {
     const descriptions = [...this.skills.values()]
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((skill) => `- ${skill.name}: ${skill.description}`);
-    return descriptions.length > 0 ? descriptions.join("\n") : "- 当前没有发现可加载技能。";
+    return descriptions.length > 0 ? descriptions.join("\n") : "- No loadable skills found.";
   }
 
   getContent(name: string): string {

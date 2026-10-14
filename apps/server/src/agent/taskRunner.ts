@@ -96,11 +96,11 @@ function buildChildInstruction(args: TaskToolArgs, context: TaskRunContext): str
   return [
     args.instruction,
     "",
-    "上一轮证据整理后的覆盖率反馈：",
-    `- 覆盖率：${Math.round(context.coverageFeedback.coverageScore * 100)}%`,
-    `- 仍缺：${context.coverageFeedback.missingAspects.join("、") || "未识别到具体缺口"}`,
-    `- 建议补充检索：${context.coverageFeedback.suggestedQueries.join("；") || context.researchPlan.searchQueries.join("；")}`,
-    "本次资料收集必须优先围绕上述缺口补资料，不要重复泛泛搜索原始主题。"
+    "Coverage feedback from the latest synthesis:",
+    `- Coverage: ${Math.round(context.coverageFeedback.coverageScore * 100)}%`,
+    `- Missing: ${context.coverageFeedback.missingAspects.join(", ") || "no specific gaps identified"}`,
+    `- Additional queries: ${context.coverageFeedback.suggestedQueries.join("; ") || context.researchPlan.searchQueries.join("; ")}`,
+    "Target the listed gaps rather than repeating a broad search for the original topic."
   ].join("\n");
 }
 
@@ -124,13 +124,13 @@ function truncateToolString(value: string, maxLength: number): string {
 }
 
 function inferAudience(instruction: string): "self_learning" | "team_lead" | "presentation" | "interview" {
-  if (/组长|leader|lead|经理|主管/.test(instruction)) {
+  if (/team discussion|team lead|leader|lead|manager|supervisor/.test(instruction)) {
     return "team_lead";
   }
-  if (/汇报|展示|presentation|slide|演示/.test(instruction)) {
+  if (/presentation|slide|demo/.test(instruction)) {
     return "presentation";
   }
-  if (/面试|interview/.test(instruction)) {
+  if (/interview/.test(instruction)) {
     return "interview";
   }
 
@@ -149,7 +149,7 @@ function resolveInjectedInput(
   if (args.inputRef) {
     const artifact = context.artifactStore.get(args.inputRef, requiredKind);
     if (!artifact) {
-      throw new Error(`找不到可用于该子任务的结果引用：${args.inputRef}`);
+      throw new Error(`No result reference found for this task: ${args.inputRef}`);
     }
     return artifact.value;
   }
@@ -158,7 +158,7 @@ function resolveInjectedInput(
     const sourceArtifacts = context.artifactStore.list<ResearchSource[]>("sources", { turnId: context.turnId });
     const sources = dedupeSources(sourceArtifacts.flatMap((artifact) => artifact.value));
     if (sources.length === 0) {
-      throw new Error(`当前轮次缺少 ${requiredKind} 结果，无法执行 ${args.taskType}。如需复用上一轮结果，请显式传入 inputRef。`);
+      throw new Error(`This turn is missing a ${requiredKind} result for ${args.taskType}. To reuse an earlier result, supply inputRef explicitly.`);
     }
 
     return sources;
@@ -166,7 +166,7 @@ function resolveInjectedInput(
 
   const latest = context.artifactStore.latest(requiredKind, { turnId: context.turnId });
   if (!latest) {
-    throw new Error(`当前轮次缺少 ${requiredKind} 结果，无法执行 ${args.taskType}。如需复用上一轮结果，请显式传入 inputRef。`);
+    throw new Error(`This turn is missing a ${requiredKind} result for ${args.taskType}. To reuse an earlier result, supply inputRef explicitly.`);
   }
 
   return latest.value;
@@ -203,25 +203,25 @@ function combinedScore(source: ResearchSource): number {
 function extractArtifactValue(kind: ResearchArtifactKind, output: string): unknown {
   const parsed = parseJson<Record<string, unknown>>(output);
   if (!parsed) {
-    throw new Error("子智能体工具返回了无效 JSON。");
+    throw new Error("The child tool returned invalid JSON.");
   }
 
   if (kind === "sources") {
     if (!Array.isArray(parsed.sources)) {
-      throw new Error("资料收集结果缺少 sources。");
+      throw new Error("The collection result is missing sources.");
     }
     return parsed.sources as ResearchSource[];
   }
 
   if (kind === "synthesis") {
     if (!parsed.synthesis || typeof parsed.synthesis !== "object") {
-      throw new Error("证据整理结果缺少 synthesis。");
+      throw new Error("The synthesis result is missing synthesis.");
     }
     return parsed.synthesis as ResearchSynthesis;
   }
 
   if (!parsed.brief || typeof parsed.brief !== "object") {
-    throw new Error("简报生成结果缺少 brief。");
+    throw new Error("The writing result is missing brief.");
   }
   return parsed.brief as ResearchBrief;
 }
@@ -239,7 +239,7 @@ function buildTaskResultPayload(
     return {
       taskType: args.taskType,
       artifactRef,
-      summary: `收集到 ${sources.length} 条候选资料。`,
+      summary: `Collected ${sources.length} candidate sources.`,
       sourceCount: sources.length,
       topSources: sources.slice(0, 3).map((source) => ({
         title: source.title,
@@ -267,7 +267,7 @@ function buildTaskResultPayload(
     return {
       taskType: args.taskType,
       artifactRef,
-      summary: `形成 ${synthesis.keyFindings.length} 条关键发现，并给出初步建议。`,
+      summary: `Identified ${synthesis.keyFindings.length} key findings and initial recommendations.`,
       researchQuestion: synthesis.researchQuestion,
       evaluationCriteria: synthesis.evaluationCriteria,
       evidenceGaps: synthesis.evidenceGaps,
@@ -281,7 +281,7 @@ function buildTaskResultPayload(
   return {
     taskType: args.taskType,
     artifactRef,
-    summary: `生成《${brief.title}》。`,
+    summary: `Created "${brief.title}".`,
     brief: {
       title: brief.title,
       conclusion: brief.conclusion,

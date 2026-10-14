@@ -145,9 +145,9 @@ export function validateSourceCollectorArgs(args: unknown): SourceCollectorArgs 
   const parsed = sourceCollectorArgsSchema.safeParse(args);
   if (!parsed.success) {
     const fields = parsed.error.issues
-      .map((issue) => (issue.path.length > 0 ? issue.path.join(".") : "参数"))
-      .join("、");
-    throw new Error(`source_collector 参数无效：${fields}`);
+      .map((issue) => (issue.path.length > 0 ? issue.path.join(".") : "arguments"))
+      .join(", ");
+    throw new Error(`source_collector Invalid arguments: ${fields}`);
   }
 
   return parsed.data;
@@ -500,7 +500,7 @@ function mapSemanticScholarPaper(topic: string, paper: SemanticScholarPaper): Re
   const title = getString(paper.title);
   const paperId = getString(paper.paperId);
   const url = getString(paper.url) || (paperId ? `https://www.semanticscholar.org/paper/${paperId}` : undefined);
-  const abstract = getString(paper.abstract) || "未提供摘要。";
+  const abstract = getString(paper.abstract) || "No abstract provided.";
   const venue = getString(paper.venue) || "Semantic Scholar";
   const year = typeof paper.year === "number" ? String(paper.year) : getString(paper.year) || null;
 
@@ -553,7 +553,7 @@ function mapCrossrefWork(topic: string, work: CrossrefWork): ResearchSource | un
 function mapArxivEntry(topic: string, entry: ArxivEntry): ResearchSource | undefined {
   const title = normalizeWhitespace(getString(entry.title) || "");
   const url = getString(entry.id);
-  const summary = normalizeWhitespace(getString(entry.summary) || "未提供摘要。");
+  const summary = normalizeWhitespace(getString(entry.summary) || "No abstract provided.");
   const publishedAt = getString(entry.published) || getString(entry.updated) || null;
 
   if (!title || !url) {

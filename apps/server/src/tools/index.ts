@@ -25,7 +25,7 @@ export const toolDefinitions = Object.values(toolRegistry).map((tool) => tool.de
 export async function executeRegisteredTool(name: string, args: unknown): Promise<ToolExecutionResult> {
   const tool = toolRegistry[name as ToolName];
   if (!tool) {
-    throw new Error(`未知工具：${name}`);
+    throw new Error(`Unknown tool: ${name}`);
   }
 
   return await tool.execute(args);

@@ -14,7 +14,7 @@ export const loadSkillToolDefinition: DeepSeekToolDefinition = {
   function: {
     name: "load_skill",
     description:
-      "按需加载一个 SKILL.md 的完整说明。只有当你需要某个技能的详细流程时才调用；不要重复加载同一个技能。",
+      "Load a complete SKILL.md workflow when needed. Do not load the same skill repeatedly.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -22,7 +22,7 @@ export const loadSkillToolDefinition: DeepSeekToolDefinition = {
       properties: {
         name: {
           type: "string",
-          description: "要加载的技能名称，例如 research_planning_skill、coverage_check_skill 或 evidence_extraction_skill。"
+          description: "Skill name, such as research_planning_skill, coverage_check_skill, or evidence_extraction_skill."
         }
       }
     }
@@ -32,7 +32,7 @@ export const loadSkillToolDefinition: DeepSeekToolDefinition = {
 export function validateLoadSkillArgs(args: unknown): LoadSkillArgs {
   const result = loadSkillArgsSchema.safeParse(args);
   if (!result.success) {
-    throw new Error(`load_skill 参数无效：${result.error.issues.map((issue) => issue.message).join("；")}`);
+    throw new Error(`load_skill Invalid arguments: ${result.error.issues.map((issue) => issue.message).join("; ")}`);
   }
 
   return result.data;

@@ -8,7 +8,7 @@ export const lengthSchema = z.enum(["short", "medium", "detailed"]);
 export const researchSourceSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  url: z.string().url(),
+  url: z.string().url().refine((value) => /^https?:\/\//i.test(value), "Source URLs must use HTTP or HTTPS"),
   sourceType: sourceTypeSchema,
   publisher: z.string().min(1),
   publishedAt: z.string().nullable(),
@@ -18,6 +18,7 @@ export const researchSourceSchema = z.object({
 });
 
 export const researchSynthesisSchema = z.object({
+  references: z.array(z.object({ title: z.string().min(1), url: z.string().url().refine((value) => /^https?:\/\//i.test(value)) })).optional(),
   focus: z.string().min(1),
   researchQuestion: z.string().min(1).optional(),
   decisionContext: z.string().min(1).optional(),
@@ -42,9 +43,9 @@ export function parseToolInput<T>(schema: z.ZodType<T>, args: unknown, toolLabel
   const result = schema.safeParse(args);
   if (!result.success) {
     const fields = result.error.issues
-      .map((issue) => (issue.path.length > 0 ? issue.path.join(".") : "参数"))
-      .join("、");
-    throw new Error(`${toolLabel} 参数无效：${fields}`);
+      .map((issue) => (issue.path.length > 0 ? issue.path.join(".") : "arguments"))
+      .join(", ");
+    throw new Error(`${toolLabel} Invalid arguments: ${fields}`);
   }
 
   return result.data;

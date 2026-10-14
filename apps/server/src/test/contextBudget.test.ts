@@ -6,7 +6,7 @@ import type { DeepSeekMessage } from "../agent/deepseek.js";
 
 const outputDir = path.resolve(process.cwd(), ".agent-data-test", "context-budget");
 
-describe("上下文预算管理", () => {
+describe("Context budgeting", () => {
   beforeEach(() => {
     rmSync(outputDir, { recursive: true, force: true });
     mkdirSync(outputDir, { recursive: true });
@@ -16,7 +16,7 @@ describe("上下文预算管理", () => {
     rmSync(outputDir, { recursive: true, force: true });
   });
 
-  it("工具输出超过阈值时写入磁盘，并在上下文中保留 persisted-output preview", () => {
+  it("persists oversized tool results", () => {
     const manager = new ContextBudgetManager("session-a", {
       outputDir,
       inlineCharLimit: 20,
@@ -31,7 +31,7 @@ describe("上下文预算管理", () => {
     expect(manager.getState().recentFiles).toContain(parsed.relativePath);
   });
 
-  it("micro compact 只保留最近 N 个工具结果，旧结果改为可恢复占位", () => {
+  it("retains recent results and recoverable placeholders", () => {
     const manager = new ContextBudgetManager("session-b", {
       outputDir,
       inlineCharLimit: 1000,
@@ -46,7 +46,7 @@ describe("上下文预算管理", () => {
     ];
 
     const compacted = manager.compactBeforeModelCall(messages, {
-      currentGoal: "测试 micro compact",
+      currentGoal: "Test micro compaction",
       uiMessages: [],
       researchEvents: []
     });
@@ -60,7 +60,7 @@ describe("上下文预算管理", () => {
     expect(compacted[4].content).toBe("recent result 2");
   });
 
-  it("接近上下文上限时触发结构化 summary compact，并保留当前轮尾部消息", () => {
+  it("compacts context while preserving recent messages", () => {
     const manager = new ContextBudgetManager("session-c", {
       outputDir,
       contextWindowTokens: 80,
@@ -69,36 +69,36 @@ describe("上下文预算管理", () => {
     });
     const messages: DeepSeekMessage[] = [
       { role: "system", content: "system prompt" },
-      { role: "user", content: "旧问题 " + "a".repeat(400) },
-      { role: "assistant", content: "旧回答 " + "b".repeat(400) },
-      { role: "user", content: "当前问题" },
-      { role: "system", content: "当前计划" }
+      { role: "user", content: "Previous question " + "a".repeat(400) },
+      { role: "assistant", content: "Previous answer " + "b".repeat(400) },
+      { role: "user", content: "Current question" },
+      { role: "system", content: "Current plan" }
     ];
 
     const compacted = manager.compactBeforeModelCall(messages, {
-      currentGoal: "当前问题",
+      currentGoal: "Current question",
       uiMessages: [],
       researchEvents: [
         {
           id: "event-1",
           toolName: "collect_sources",
-          stepLabel: "收集资料",
+          stepLabel: "Collect sources",
           args: {},
           status: "completed",
-          output: JSON.stringify({ summary: "收集到 3 条候选资料。" }),
+          output: JSON.stringify({ summary: "Collected three candidate sources." }),
           startedAt: "2026-01-01T00:00:00.000Z",
           finishedAt: "2026-01-01T00:00:01.000Z"
         }
       ]
     });
-    const summaryMessage = compacted.find((message) => message.role === "system" && message.content?.includes("上下文连续性摘要"));
+    const summaryMessage = compacted.find((message) => message.role === "system" && message.content?.includes("Context continuity summary"));
 
-    expect(summaryMessage?.content).toContain("## 当前目标");
-    expect(summaryMessage?.content).toContain("## 已完成步骤");
-    expect(summaryMessage?.content).toContain("## 涉及文件");
-    expect(summaryMessage?.content).toContain("## 关键决策与约束");
-    expect(summaryMessage?.content).toContain("## 下一步行动");
-    expect(compacted.some((message) => message.role === "user" && message.content === "当前问题")).toBe(true);
+    expect(summaryMessage?.content).toContain("## Current goal");
+    expect(summaryMessage?.content).toContain("## Completed steps");
+    expect(summaryMessage?.content).toContain("## Referenced files");
+    expect(summaryMessage?.content).toContain("## Key decisions and constraints");
+    expect(summaryMessage?.content).toContain("## Next actions");
+    expect(compacted.some((message) => message.role === "user" && message.content === "Current question")).toBe(true);
     expect(manager.getState().hasCompacted).toBe(true);
     expect(estimateContextTokens(compacted)).toBeLessThan(estimateContextTokens(messages));
   });

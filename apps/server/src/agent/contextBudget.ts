@@ -121,7 +121,7 @@ export class ContextBudgetManager {
           {
             kind: "compacted-tool-result",
             reason: "micro-compact",
-            note: "旧工具结果已从活跃上下文移出；完整内容可通过 persisted-output 路径恢复。",
+            note: "Older tool results were removed from active context; recover their full contents from persisted-output references.",
             persistedOutput: persisted
           },
           null,
@@ -230,38 +230,38 @@ export function getDefaultContextBudgetOptions(): ContextBudgetOptions {
 
 function buildStructuredSummary(context: CompactContext, state: CompactState, manual: boolean): string {
   const completedSteps = context.researchEvents.slice(-12).map((event, index) => {
-    const status = event.status === "completed" ? "已完成" : "失败";
-    const result = event.status === "completed" ? summarizeToolEventOutput(event.output) : event.error || "未知错误";
-    return `${index + 1}. ${event.stepLabel}：${status}。${result}`;
+    const status = event.status === "completed" ? "Completed" : "Failed";
+    const result = event.status === "completed" ? summarizeToolEventOutput(event.output) : event.error || "Unknown error";
+    return `${index + 1}. ${event.stepLabel}: ${status}.${result}`;
   });
 
-  const recentFiles = state.recentFiles.length > 0 ? state.recentFiles.map((file) => `- ${file}`) : ["- 暂无持久化文件。"];
+  const recentFiles = state.recentFiles.length > 0 ? state.recentFiles.map((file) => `- ${file}`) : ["- No persisted files."];
 
   return [
-    "# 上下文连续性摘要",
+    "# Context continuity summary",
     "",
-    "## 当前目标",
-    context.currentGoal || "继续完成当前调研任务。",
+    "## Current goal",
+    context.currentGoal || "Continue the current research task.",
     "",
-    "## 已完成步骤",
-    ...(completedSteps.length > 0 ? completedSteps : ["暂无已完成工具步骤。"]),
+    "## Completed steps",
+    ...(completedSteps.length > 0 ? completedSteps : ["No completed tool steps."]),
     "",
-    "## 涉及文件",
+    "## Referenced files",
     ...recentFiles,
     "",
-    "## 关键决策与约束",
-    "- 工具输出超过阈值时必须使用 persisted-output 路径和 preview，不直接注入完整大文本。",
-    "- 旧工具结果被 micro compact 后仍可通过 persisted-output 文件恢复，不视为删除。",
-    "- 调研回答必须基于真实资料来源，不能伪造来源或把内部工具日志暴露给用户。",
-    "- 资料不足时优先补充收集；资料充分后再整理证据并生成中文简报。",
+    "## Key decisions and constraints",
+    "- Use persisted-output paths and previews for oversized tool results.",
+    "- Compacted results remain recoverable from persisted-output files.",
+    "- Base answers on real sources. Do not invent references or expose internal tool logs.",
+    "- Collect missing evidence first, then synthesize it and write an English brief.",
     "",
-    "## 下一步行动",
+    "## Next actions",
     context.nextAction || inferNextAction(context.researchEvents),
     "",
-    "## 压缩状态",
-    `- 触发方式：${manual ? "手动 /compact" : "自动上下文预算管理"}`,
-    `- 已持久化输出：${state.persistedOutputs.length} 个`,
-    `- 估算上下文：${state.estimatedTokens} tokens`
+    "## Compaction state",
+    `- Trigger: ${manual ? "Manual /compact" : "Automatic context budgeting"}`,
+    `- Persisted outputs: ${state.persistedOutputs.length}`,
+    `- Estimated context: ${state.estimatedTokens} tokens`
   ].join("\n");
 }
 
@@ -307,7 +307,7 @@ function isCompactedToolResult(content: string): boolean {
 
 function summarizeToolEventOutput(output: string | undefined): string {
   if (!output) {
-    return "没有可用输出。";
+    return "No output available.";
   }
 
   try {
@@ -316,10 +316,10 @@ function summarizeToolEventOutput(output: string | undefined): string {
       return parsed.summary;
     }
     if (typeof parsed.sourceCount === "number") {
-      return `收集到 ${parsed.sourceCount} 条资料。`;
+      return `Collected ${parsed.sourceCount} sources.`;
     }
     if (Array.isArray(parsed.keyFindings)) {
-      return `形成 ${parsed.keyFindings.length} 条关键发现。`;
+      return `Identified ${parsed.keyFindings.length} key findings.`;
     }
   } catch {
     // Fall back to text preview below.
@@ -332,18 +332,18 @@ function inferNextAction(events: ResearchToolEvent[]): string {
   const completed = events.filter((event) => event.status === "completed");
   const latest = completed.at(-1);
   if (!latest) {
-    return "下一步应先收集资料。";
+    return "Collect sources next.";
   }
 
   if (latest.toolName === "collect_sources") {
-    return "下一步应整理证据，判断资料覆盖是否足够。";
+    return "Synthesize evidence next and assess coverage.";
   }
 
   if (latest.toolName === "synthesize_evidence") {
-    return "下一步应根据覆盖情况决定补充资料或生成简报。";
+    return "Use coverage to decide whether to collect more sources or write a brief.";
   }
 
-  return "下一步应输出最终用户可读结果，避免继续无意义调用工具。";
+  return "Return the final readable result instead of making unnecessary tool calls.";
 }
 
 function readPositiveInt(name: string, fallback: number): number {

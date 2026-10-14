@@ -40,7 +40,7 @@ export async function createChatCompletion(input: {
 }): Promise<DeepSeekMessage> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    throw new Error("缺少 DEEPSEEK_API_KEY，请在 apps/server/.env 中配置。");
+    throw new Error("Missing DEEPSEEK_API_KEY. Configure it in apps/server/.env.");
   }
 
   const timeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS || "20000");
@@ -65,7 +65,7 @@ export async function createChatCompletion(input: {
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`DeepSeek API 在 ${timeoutMs}ms 后超时。`);
+      throw new Error(`DeepSeek API timed out after ${timeoutMs}ms.`);
     }
     throw error;
   } finally {
@@ -74,13 +74,13 @@ export async function createChatCompletion(input: {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`DeepSeek API 错误 ${response.status}：${body}`);
+    throw new Error(`DeepSeek API error ${response.status}: ${body}`);
   }
 
   const data = (await response.json()) as ChatCompletionResponse;
   const message = data.choices.at(0)?.message;
   if (!message) {
-    throw new Error("DeepSeek API 没有返回消息。");
+    throw new Error("DeepSeek API did not return a message.");
   }
 
   return message;
