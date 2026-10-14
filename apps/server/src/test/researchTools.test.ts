@@ -31,7 +31,7 @@ const sampleSource: ResearchSource = {
   credibilityScore: 0.9
 };
 
-describe("source_collector 真实资料采集工具", () => {
+describe("researchTools", () => {
   beforeEach(() => {
     process.env.SEARCH_PROVIDER = "tavily";
     process.env.SEARCH_API_KEY = "test-key";
@@ -44,30 +44,30 @@ describe("source_collector 真实资料采集工具", () => {
     vi.unstubAllGlobals();
   });
 
-  it("能校验参数并补齐默认值", () => {
-    expect(validateSourceCollectorArgs({ topic: "RAG 评估方法" })).toMatchObject({
-      topic: "RAG 评估方法",
+  it("validates arguments and defaults", () => {
+    expect(validateSourceCollectorArgs({ topic: "RAG evaluation methods" })).toMatchObject({
+      topic: "RAG evaluation methods",
       sourceTypes: ["papers"],
       maxResults: 6,
       recency: "balanced"
     });
 
-    expect(() => validateSourceCollectorArgs({ topic: "R" })).toThrow(/source_collector 参数无效/);
+    expect(() => validateSourceCollectorArgs({ topic: "R" })).toThrow(/source_collector Invalid arguments/);
     expect(() =>
       validateSourceCollectorArgs({
-        topic: "RAG 评估方法",
+        topic: "RAG evaluation methods",
         sourceTypes: ["invalid"]
       })
-    ).toThrow(/source_collector 参数无效/);
+    ).toThrow(/source_collector Invalid arguments/);
   });
 
-  it("sourceTypes 包含 web 但缺少 SEARCH_API_KEY 时明确报错", async () => {
+  it("rejects web requests without a key", async () => {
     delete process.env.SEARCH_API_KEY;
     process.env.SEARCH_PROVIDER = "unsupported";
 
     await expect(
       collectWebSources({
-        topic: "RAG 评估方法",
+        topic: "RAG evaluation methods",
         sourceTypes: ["web"],
         maxResults: 3,
         recency: "balanced"
@@ -75,13 +75,13 @@ describe("source_collector 真实资料采集工具", () => {
     ).rejects.toThrow("Missing SEARCH_API_KEY for web search");
   });
 
-  it("SEARCH_PROVIDER 不支持时明确报错", async () => {
+  it("rejects unsupported search providers", async () => {
     process.env.SEARCH_PROVIDER = "unsupported";
     process.env.SEARCH_API_KEY = "test-key";
 
     await expect(
       collectWebSources({
-        topic: "RAG 评估方法",
+        topic: "RAG evaluation methods",
         sourceTypes: ["web"],
         maxResults: 3,
         recency: "balanced"
@@ -89,7 +89,7 @@ describe("source_collector 真实资料采集工具", () => {
     ).rejects.toThrow(/Unsupported SEARCH_PROVIDER/);
   });
 
-  it("能解析 Tavily web 搜索结果", async () => {
+  it("parses Tavily results", async () => {
     process.env.SEARCH_API_KEY = " test-key ";
     const fetchMock = vi.fn(async () =>
       jsonResponse({
@@ -127,7 +127,7 @@ describe("source_collector 真实资料采集工具", () => {
     });
   });
 
-  it("默认使用 arXiv 作为无需 key 的 papers 来源", async () => {
+  it("defaults paper searches to arXiv", async () => {
     const fetchMock = vi.fn(async () => textResponse(arxivXml()));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -157,7 +157,7 @@ describe("source_collector 真实资料采集工具", () => {
     });
   });
 
-  it("显式选择 Semantic Scholar 时能解析返回结果", async () => {
+  it("parses Semantic Scholar results", async () => {
     process.env.PAPER_PROVIDER = "semantic_scholar";
     process.env.SEMANTIC_SCHOLAR_API_KEY = " semantic-key ";
     const fetchMock = vi.fn(async () =>
@@ -201,7 +201,7 @@ describe("source_collector 真实资料采集工具", () => {
     });
   });
 
-  it("外部 API 失败或响应格式错误时不做 fallback", async () => {
+  it("does not fabricate fallback sources", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("bad gateway", { status: 502 })));
 
     await expect(
@@ -225,7 +225,7 @@ describe("source_collector 真实资料采集工具", () => {
     ).rejects.toThrow(/Invalid response format/);
   });
 
-  it("外部资料 API 超时时返回明确错误", async () => {
+  it("reports source timeouts", async () => {
     process.env.SOURCE_API_TIMEOUT_MS = "1";
     vi.stubGlobal(
       "fetch",
@@ -251,7 +251,7 @@ describe("source_collector 真实资料采集工具", () => {
     ).rejects.toThrow(/arXiv timed out after 1ms/);
   });
 
-  it("Semantic Scholar 429 时提示配置 API key 或稍后重试", async () => {
+  it("reports Semantic Scholar rate limits", async () => {
     process.env.PAPER_PROVIDER = "semantic_scholar";
     vi.stubGlobal("fetch", vi.fn(async () => new Response("Too Many Requests", { status: 429 })));
 
@@ -331,13 +331,13 @@ describe("source_collector 真实资料采集工具", () => {
     expect(sources[0].url).toBe("https://doi.org/10.5555/rag.eval");
   });
 
-  it("relevanceScore 能按主题命中词计算", () => {
+  it("scores source relevance", () => {
     expect(scoreRelevance("RAG evaluation", "RAG metrics", "evaluation framework")).toBe(1);
     expect(scoreRelevance("RAG evaluation", "RAG metrics", "retrieval framework")).toBe(0.5);
     expect(scoreRelevance("RAG evaluation", "unrelated", "benchmark")).toBe(0);
   });
 
-  it("credibilityScore 能按域名规则判断", () => {
+  it("scores domain credibility", () => {
     expect(scoreCredibility("https://arxiv.org/abs/2401.1")).toBe(0.9);
     expect(scoreCredibility("https://nature.com/articles/example")).toBe(0.9);
     expect(scoreCredibility("https://github.com/example/project")).toBe(0.8);
@@ -346,7 +346,7 @@ describe("source_collector 真实资料采集工具", () => {
     expect(scoreCredibility("https://example.com/article")).toBe(0.5);
   });
 
-  it("去重逻辑按 url 去重并按综合分排序", () => {
+  it("deduplicates and ranks sources", () => {
     const sources = dedupeSources(
       [
         { ...sampleSource, id: "low", url: "https://example.com/a", relevanceScore: 0.2, credibilityScore: 0.5 },
@@ -361,7 +361,7 @@ describe("source_collector 真实资料采集工具", () => {
     expect(sources[1].id).toBe("second");
   });
 
-  it("runSourceCollector 能统一返回结构化 ResearchSource[]", async () => {
+  it("normalizes collected sources", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => textResponse(arxivXml())));
 
     const result = await runSourceCollector({
@@ -377,30 +377,30 @@ describe("source_collector 真实资料采集工具", () => {
   });
 });
 
-describe("调研工具注册表和后续工具", () => {
-  it("evidence_synthesizer 能从真实来源结构生成关键发现", async () => {
+describe("researchTools", () => {
+  it("synthesizes source structures", async () => {
     const result = await runEvidenceSynthesizer({
       sources: [sampleSource],
-      focus: "面向组长讨论的 RAG 评估方案",
+      focus: "RAG evaluation for team discussion",
       outputFormat: "decision_brief"
     });
     const parsed = JSON.parse(result.output);
 
     expect(parsed.synthesis.keyFindings.length).toBeGreaterThan(0);
-    expect(parsed.synthesis.recommendation).toContain("评估框架");
+    expect(parsed.synthesis.recommendation).toContain("evaluation workflow");
   });
 
-  it("evidence_synthesizer 缺少 focus 时使用工具层默认值，不再失败", async () => {
+  it("defaults missing synthesis focus", async () => {
     const result = await runEvidenceSynthesizer({
       sources: [sampleSource]
     });
     const parsed = JSON.parse(result.output);
 
-    expect(parsed.synthesis.focus).toBe("基于已收集资料的综合分析");
+    expect(parsed.synthesis.focus).toBe("Synthesis of collected sources");
     expect(parsed.synthesis.keyFindings.length).toBeGreaterThan(0);
   });
 
-  it("evidence_synthesizer 对 RAG 评估主题会生成贴合领域的对比维度", async () => {
+  it("compares RAG evaluation dimensions", async () => {
     const result = await runEvidenceSynthesizer({
       sources: [
         sampleSource,
@@ -413,42 +413,42 @@ describe("调研工具注册表和后续工具", () => {
             "RAGAS, TruLens and DeepEval evaluate faithfulness, answer relevancy, context precision, context recall and production monitoring."
         }
       ],
-      focus: "RAG 评估体系全面分析",
+      focus: "RAG evaluation analysis",
       outputFormat: "decision_brief"
     });
     const parsed = JSON.parse(result.output);
     const dimensions = parsed.synthesis.comparisons.map((item: { dimension: string }) => item.dimension);
 
-    expect(dimensions).toEqual(expect.arrayContaining(["评估层次", "关键指标", "框架选择", "数据集和基准"]));
+    expect(dimensions).toEqual(expect.arrayContaining(["Evaluation levels", "Key metrics", "Framework selection", "Datasets and benchmarks"]));
     expect(parsed.synthesis.keyFindings.join("\n")).toContain("faithfulness");
     expect(parsed.synthesis.comparisons.map((item: { notes: string }) => item.notes).join("\n")).toContain("RAGAS");
   });
 
-  it("evidence_synthesizer 在 memory 主题下不会被来源里的 RAG 关键词带偏", async () => {
+  it("keeps memory research focused", async () => {
     const result = await runEvidenceSynthesizer({
       sources: [sampleSource],
-      focus: "帮我研究 长上下文记忆框架选型",
+      focus: "Research long-context memory framework selection",
       outputFormat: "decision_brief"
     });
     const parsed = JSON.parse(result.output);
 
-    expect(parsed.synthesis.researchQuestion).toContain("记忆框架");
+    expect(parsed.synthesis.researchQuestion).toContain("memory framework");
     expect(parsed.synthesis.researchQuestion).not.toContain("RAG");
-    expect(parsed.synthesis.keyFindings.join("\n")).toContain("不能等同于 RAG 评估");
+    expect(parsed.synthesis.keyFindings.join("\n")).toContain("Memory selection requires its own evaluation");
     expect(parsed.synthesis.comparisons.map((item: { dimension: string }) => item.dimension)).toEqual(
-      expect.arrayContaining(["Mem0", "Letta/MemGPT", "Zep", "LangGraph Memory", "CrewAI Memory", "自研轻量记忆层"])
+      expect.arrayContaining(["Mem0", "Letta/MemGPT", "Zep", "LangGraph Memory", "CrewAI Memory", "Custom lightweight memory layer"])
     );
     expect(parsed.synthesis.comparisons.map((item: { notes: string }) => item.notes).join("\n")).toContain(
-      "本轮资料摘要未命中"
+      "absent from collected abstracts"
     );
   });
 
-  it("brief_writer 能生成自然语言简报", async () => {
+  it("writes a readable brief", async () => {
     const synthesis = JSON.parse(
       (
         await runEvidenceSynthesizer({
           sources: [sampleSource],
-          focus: "面向组长讨论的 RAG 评估方案",
+          focus: "RAG evaluation for team discussion",
           outputFormat: "decision_brief"
         })
       ).output
@@ -461,11 +461,11 @@ describe("调研工具注册表和后续工具", () => {
     });
     const parsed = JSON.parse(result.output);
 
-    expect(parsed.brief.content).toContain("# 面向组长讨论的 RAG 评估方案调研简报");
-    expect(parsed.brief.content).toContain("## 关键发现");
+    expect(parsed.brief.content).toContain("# RAG evaluation for team discussion Research brief");
+    expect(parsed.brief.content).toContain("## Key findings");
   });
 
-  it("brief_writer 会把 memory 主题的候选框架表写进简报", async () => {
+  it("includes memory framework tables", async () => {
     const synthesis = JSON.parse(
       (
         await runEvidenceSynthesizer({
@@ -476,7 +476,7 @@ describe("调研工具注册表和后续工具", () => {
               summary: "This survey mentions Mem0, Letta, Zep and LangGraph memory for long-term agent memory."
             }
           ],
-          focus: "帮我研究 长上下文记忆框架选型",
+          focus: "Research long-context memory framework selection",
           outputFormat: "decision_brief"
         })
       ).output
@@ -489,34 +489,34 @@ describe("调研工具注册表和后续工具", () => {
     });
     const parsed = JSON.parse(result.output);
 
-    expect(parsed.brief.title).toBe("agent/LLM 记忆框架选型调研简报");
-    expect(parsed.brief.content).toContain("## 候选框架对比");
+    expect(parsed.brief.title).toBe("Agent/LLM memory framework selection brief");
+    expect(parsed.brief.content).toContain("## Framework comparison");
     expect(parsed.brief.content).toContain("| Mem0 |");
     expect(parsed.brief.content).toContain("| Letta/MemGPT |");
     expect(parsed.brief.content).toContain("| LangGraph Memory |");
   });
 
-  it("brief_writer 会把过长 focus 收敛成短标题", async () => {
+  it("shortens verbose titles", async () => {
     const result = await runBriefWriter({
       synthesis: {
         focus:
-          "RAG评估方法的综合分析，包括：1）核心评估维度（忠实度、答案相关性、上下文相关性、检索质量）的定义与含义；2）主流评估框架对比。",
+          "RAG evaluation overview, including metric definitions, retrieval quality, answer faithfulness, and framework comparisons.",
         outputFormat: "decision_brief",
-        keyFindings: ["RAG 评估需要同时覆盖检索质量和答案忠实度。"],
-        comparisons: [{ dimension: "指标", notes: "检索指标和生成指标需要分开看。" }],
-        risksOrLimitations: ["资料覆盖仍需后续扩展。"],
-        recommendation: "先建立小样本评估框架，再逐步扩展。"
+        keyFindings: ["RAG evaluation covers retrieval quality and answer faithfulness."],
+        comparisons: [{ dimension: "Metrics", notes: "Separate retrieval and generation metrics." }],
+        risksOrLimitations: ["More source coverage is required."],
+        recommendation: "Build a small evaluation workflow, then expand."
       },
       audience: "self_learning",
       length: "medium"
     });
     const parsed = JSON.parse(result.output);
 
-    expect(parsed.brief.title).toBe("RAG评估方法的综合分析调研简报");
-    expect(parsed.brief.content.split("\n")[0]).toBe("# RAG评估方法的综合分析调研简报");
+    expect(parsed.brief.title).toBe("RAG evaluation overview Research brief");
+    expect(parsed.brief.content.split("\n")[0]).toBe("# RAG evaluation overview Research brief");
   });
 
-  it("注册表只暴露调研能力", async () => {
+  it("exposes research tools only", async () => {
     expect(Object.keys(toolRegistry)).toEqual(["source_collector", "evidence_synthesizer", "brief_writer"]);
     expect(toolDefinitions.map((tool) => tool.function.name)).toEqual([
       "source_collector",
@@ -524,7 +524,7 @@ describe("调研工具注册表和后续工具", () => {
       "brief_writer"
     ]);
 
-    await expect(executeRegisteredTool("unknown_tool", {})).rejects.toThrow(/未知工具/);
+    await expect(executeRegisteredTool("unknown_tool", {})).rejects.toThrow(/Unknown tool/);
   });
 });
 
@@ -611,3 +611,16 @@ function restoreSearchEnv(): void {
     process.env.SOURCE_API_TIMEOUT_MS = originalSourceApiTimeoutMs;
   }
 }
+
+describe("Source references", () => {
+  it("preserves collected references through synthesis and brief writing", async () => {
+    const result = await runEvidenceSynthesizer({ sources: [sampleSource], focus: "RAG evaluation" });
+    const synthesis = JSON.parse(result.output).synthesis;
+    const brief = JSON.parse((await runBriefWriter({ synthesis })).output).brief;
+    expect(brief.content).toContain("## Sources");
+    for (const source of [sampleSource]) expect(brief.content).toContain(source.url);
+  });
+  it("rejects references with a non-HTTP protocol", async () => {
+    await expect(runEvidenceSynthesizer({ sources: [{ ...sampleSource, url: "javascript:alert(1)" }] })).rejects.toThrow("Invalid arguments");
+  });
+});

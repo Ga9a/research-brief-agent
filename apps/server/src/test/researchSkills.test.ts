@@ -29,58 +29,58 @@ const benchmarkSource: ResearchSource = {
   credibilityScore: 0.8
 };
 
-describe("调研 skills", () => {
-  it("research_planning_skill 能把 RAG 评估主题拆成关键方面", () => {
-    const plan = buildResearchPlan("帮我研究 RAG 评估体系");
+describe("researchSkills", () => {
+  it("plans RAG evaluation aspects", () => {
+    const plan = buildResearchPlan("Research RAG evaluation system");
 
-    expect(plan.requiredAspects).toContain("核心评估维度");
-    expect(plan.requiredAspects).toContain("主流评估框架对比");
+    expect(plan.requiredAspects).toContain("Core evaluation dimensions");
+    expect(plan.requiredAspects).toContain("Evaluation framework comparison");
     expect(plan.researchQuestion).toContain("RAG");
-    expect(plan.evaluationCriteria).toContain("答案忠实度和幻觉率");
+    expect(plan.evaluationCriteria).toContain("Answer faithfulness and hallucination rate");
     expect(plan.searchQueries.some((query) => query.includes("RAGAS"))).toBe(true);
   });
 
-  it("research_planning_skill 能把记忆框架主题拆成研究问题、评估标准和实验要求", () => {
-    const plan = buildResearchPlan("帮我研究开源记忆力框架");
+  it("plans memory framework evaluation", () => {
+    const plan = buildResearchPlan("Research open-source memory frameworks");
 
-    expect(plan.researchQuestion).toContain("记忆框架");
-    expect(plan.decisionContext).toContain("选型");
-    expect(plan.requiredAspects).toContain("评估指标和基准方法");
-    expect(plan.requiredAspects).toContain("实验设计和数据需求");
+    expect(plan.researchQuestion).toContain("memory framework");
+    expect(plan.decisionContext).toContain("Select");
+    expect(plan.requiredAspects).toContain("Evaluation metrics and benchmark methods");
+    expect(plan.requiredAspects).toContain("Experiment design and data requirements");
     expect(plan.evaluationCriteria).toEqual(
-      expect.arrayContaining(["记忆命中率和召回质量", "检索延迟、写入延迟和端到端 latency", "token 成本、存储成本和索引维护成本"])
+      expect.arrayContaining(["Memory hit rate and retrieval quality", "Retrieval, write, and end-to-end latency", "Token, storage, and index maintenance costs"])
     );
-    expect(plan.evidenceRequirements.some((item) => item.includes("POC 实验设计"))).toBe(true);
+    expect(plan.evidenceRequirements.some((item) => item.includes("proof-of-concept experiment"))).toBe(true);
   });
 
-  it("research_planning_skill 不会把 memory benchmark 误判成 RAG 评估", () => {
-    const plan = buildResearchPlan("帮我研究 长上下文记忆框架选型和 memory benchmark");
+  it("distinguishes memory and RAG benchmarks", () => {
+    const plan = buildResearchPlan("Research long-context memory framework selection and memory benchmark");
 
-    expect(plan.researchQuestion).toContain("记忆框架");
+    expect(plan.researchQuestion).toContain("memory framework");
     expect(plan.researchQuestion).not.toContain("RAG");
     expect(plan.searchQueries.some((query) => query.includes("memory"))).toBe(true);
   });
 
-  it("evidence_extraction_skill 能从来源摘要中抽取指标和框架线索", () => {
-    const plan = buildResearchPlan("RAG 评估体系");
+  it("extracts evidence terms", () => {
+    const plan = buildResearchPlan("RAG evaluation system");
     const extraction = extractEvidenceFromSources([ragSource], plan);
 
     expect(extraction.itemCount).toBe(1);
-    expect(extraction.coveredAspectTags).toContain("关键评估指标");
+    expect(extraction.coveredAspectTags).toContain("Key evaluation metrics");
     expect(extraction.items[0].frameworks).toContain("RAGAS");
     expect(extraction.items[0].metrics).toContain("faithfulness");
   });
 
-  it("coverage_check_skill 能识别缺失方面并建议补充检索", () => {
-    const plan = buildResearchPlan("RAG 评估体系");
+  it("identifies missing coverage", () => {
+    const plan = buildResearchPlan("RAG evaluation system");
     const evidence = extractEvidenceFromSources([ragSource], plan);
     const synthesis: ResearchSynthesis = {
-      focus: "RAG 评估体系",
+      focus: "RAG evaluation system",
       outputFormat: "decision_brief",
-      keyFindings: ["RAG 评估需要覆盖 faithfulness、answer relevancy 和 context precision。"],
-      comparisons: [{ dimension: "指标", notes: "需要区分检索质量和生成质量。" }],
-      risksOrLimitations: ["自动化评估仍需要人工复核。"],
-      recommendation: "先建立小样本指标集。"
+      keyFindings: ["RAG evaluation covers faithfulness, answer relevancy, and context precision."],
+      comparisons: [{ dimension: "Metrics", notes: "Separate retrieval and generation quality." }],
+      risksOrLimitations: ["Automated evaluation requires human review."],
+      recommendation: "Start with a small metric set."
     };
 
     const report = evaluateCoverage({
@@ -91,13 +91,13 @@ describe("调研 skills", () => {
     });
 
     expect(report.coverageScore).toBeLessThan(1);
-    expect(report.missingAspects).toContain("评估数据集和基准测试");
+    expect(report.missingAspects).toContain("Evaluation datasets and benchmarks");
     expect(report.shouldCollectMore).toBe(true);
-    expect(report.suggestedQueries.some((query) => query.includes("评估数据集和基准测试"))).toBe(true);
+    expect(report.suggestedQueries.some((query) => query.includes("Evaluation datasets and benchmarks"))).toBe(true);
   });
 
-  it("coverage_check_skill 能识别 memory 主题中的记忆模型和候选框架覆盖", () => {
-    const plan = buildResearchPlan("帮我研究 长上下文记忆框架选型");
+  it("recognizes memory coverage", () => {
+    const plan = buildResearchPlan("Research long-context memory framework selection");
     const sources: ResearchSource[] = [
       {
         id: "papers:memory",
@@ -118,41 +118,41 @@ describe("调研 skills", () => {
       researchQuestion: plan.researchQuestion,
       outputFormat: "decision_brief",
       keyFindings: [
-        "长上下文记忆选型需要区分 short-term memory、long-term memory、episodic memory、semantic memory 和 procedural memory。",
-        "候选框架应比较 Mem0、Letta/MemGPT、Zep、LangGraph Memory、CrewAI Memory 和自研轻量记忆层。"
+        "Long-context memory selection distinguishes short-term, long-term, episodic, semantic, and procedural memory.",
+        "Compare Mem0, Letta/MemGPT, Zep, LangGraph Memory, CrewAI Memory, and a custom memory layer."
       ],
       comparisons: [
-        { dimension: "Mem0", notes: "轻量语义记忆层，需要验证召回质量和删除能力。" },
-        { dimension: "Letta/MemGPT", notes: "虚拟上下文管理，需要验证复杂度和延迟。" }
+        { dimension: "Mem0", notes: "A lightweight semantic memory layer requiring recall and deletion validation." },
+        { dimension: "Letta/MemGPT", notes: "Virtual context management requiring complexity and latency validation." }
       ],
-      risksOrLimitations: ["需要验证隐私、记忆污染和长期成本。"],
-      recommendation: "用 POC 比较候选框架。"
+      risksOrLimitations: ["Validate privacy, memory contamination, and long-term costs."],
+      recommendation: "Compare candidate frameworks in a proof of concept."
     };
 
     const report = evaluateCoverage({ plan, sources, synthesis, evidence });
 
-    expect(report.coveredAspects).toContain("记忆模型和核心概念");
-    expect(report.coveredAspects.some((aspect) => aspect.includes("主流记忆框架对比"))).toBe(true);
+    expect(report.coveredAspects).toContain("Memory models and core concepts");
+    expect(report.coveredAspects.some((aspect) => aspect.includes("Memory framework comparison"))).toBe(true);
   });
 
-  it("coverage_check_skill 在关键方面覆盖后允许进入写作", () => {
-    const plan = buildResearchPlan("RAG 评估体系");
+  it("allows writing with sufficient coverage", () => {
+    const plan = buildResearchPlan("RAG evaluation system");
     const sources = [ragSource, benchmarkSource];
     const evidence = extractEvidenceFromSources(sources, plan);
     const synthesis: ResearchSynthesis = {
-      focus: "RAG 评估体系",
+      focus: "RAG evaluation system",
       outputFormat: "decision_brief",
       keyFindings: [
-        "RAG 评估需要覆盖检索质量、生成质量和端到端质量。",
-        "RAGAS、TruLens、ARES、DeepEval 和 LangSmith 可用于不同评估场景。",
-        "RGB、CRUD、KILT、Natural Questions 可作为 benchmark 数据集。",
-        "生产实践中需要关注人工复核、成本和常见陷阱。"
+        "RAG evaluation covers retrieval, generation, and end-to-end quality.",
+        "RAGAS, TruLens, ARES, DeepEval, and LangSmith address different evaluation needs.",
+        "RGB, CRUD, KILT, and Natural Questions can serve as benchmark datasets.",
+        "Production practice needs human review of costs and pitfalls."
       ],
       comparisons: [
-        { dimension: "框架", notes: "RAGAS、TruLens、ARES、DeepEval、LangSmith 各有适用场景。" }
+        { dimension: "Frameworks", notes: "RAGAS, TruLens, ARES, DeepEval, and LangSmith have different use cases." }
       ],
-      risksOrLimitations: ["自动化评估需要人工抽样校准。"],
-      recommendation: "用小样本验证评估框架，再扩展到生产。"
+      risksOrLimitations: ["Calibrate automated evaluation using human samples."],
+      recommendation: "Validate the evaluation workflow on a small sample before production."
     };
 
     const report = evaluateCoverage({ plan, sources, synthesis, evidence });

@@ -50,7 +50,7 @@ function createResearchEvent(): ResearchToolEvent {
   return {
     id: "event-1",
     toolName: "collect_sources",
-    stepLabel: "收集资料",
+    stepLabel: "Collect sources",
     args: { taskType: "collect_sources" },
     status: "completed",
     output: "{}",

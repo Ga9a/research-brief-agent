@@ -34,22 +34,22 @@ const sampleSource: ResearchSource = {
 };
 
 const sourceOutput = {
-  topic: "RAG 评估方法",
+  topic: "RAG evaluation methods",
   sources: [sampleSource]
 };
 
 const synthesisOutput = {
   synthesis: {
-    focus: "帮我研究 RAG 评估方法",
+    focus: "Research RAG evaluation methods",
     outputFormat: "decision_brief",
-    keyFindings: ["RAG 评估需要覆盖检索质量和答案忠实度。"],
-    comparisons: [{ dimension: "评估层次", notes: "拆分检索、生成和端到端质量。" }],
-    risksOrLimitations: ["需要人工复核自动化指标。"],
-    recommendation: "先建立小样本评估框架。"
+    keyFindings: ["RAG evaluation covers retrieval quality and answer faithfulness."],
+    comparisons: [{ dimension: "Evaluation levels", notes: "Separate retrieval, generation, and end-to-end quality." }],
+    risksOrLimitations: ["Automated metrics need human review."],
+    recommendation: "Build a small evaluation workflow first."
   }
 };
 
-describe("CRITICAL REGRESSION: evidence_synthesizer focus 不能再成为必填参数", () => {
+describe("criticalRegression", () => {
   beforeEach(() => {
     mocks.createChatCompletion.mockReset();
     mocks.executeRegisteredTool.mockReset();
@@ -63,27 +63,27 @@ describe("CRITICAL REGRESSION: evidence_synthesizer focus 不能再成为必填�
         return await actual.executeRegisteredTool(name, args);
       }
 
-      throw new Error(`未知工具：${name}`);
+      throw new Error(`Unknown tool: ${name}`);
     });
   });
 
-  it("tool schema 不允许把 focus 放进 required", () => {
+  it("keeps focus optional in the schema", () => {
     expect(evidenceSynthesizerDefinition.function.parameters).toMatchObject({
       required: []
     });
   });
 
-  it("直接通过注册表调用 evidence_synthesizer，缺少 focus 时必须成功", async () => {
+  it("allows registry synthesis without focus", async () => {
     const result = await executeRegisteredTool("evidence_synthesizer", {
       sources: [sampleSource]
     });
     const parsed = JSON.parse(result.output);
 
-    expect(parsed.synthesis.focus).toBe("基于已收集资料的综合分析");
+    expect(parsed.synthesis.focus).toBe("Synthesis of collected sources");
     expect(parsed.synthesis.keyFindings.length).toBeGreaterThan(0);
   });
 
-  it("focus 为空字符串时必须自动兜底，不能报“参数无效：focus”", async () => {
+  it("defaults an empty focus", async () => {
     await expect(
       executeRegisteredTool("evidence_synthesizer", {
         sources: [sampleSource],
@@ -91,32 +91,32 @@ describe("CRITICAL REGRESSION: evidence_synthesizer focus 不能再成为必填�
         outputFormat: "decision_brief"
       })
     ).resolves.toMatchObject({
-      output: expect.stringContaining("基于已收集资料的综合分析")
+      output: expect.stringContaining("Synthesis of collected sources")
     });
   });
 
-  it("完整 agent 子任务路径中，子模型传空参数也必须由后端注入 focus", async () => {
+  it("injects focus through the child workflow", async () => {
     mocks.createChatCompletion
-      .mockResolvedValueOnce(parentTask("task_collect", "collect_sources", "收集 RAG 评估方法资料"))
-      .mockResolvedValueOnce(childTool("source_collect", "source_collector", { topic: "RAG 评估方法", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize", "synthesize_evidence", "整理 RAG 评估方法资料"))
+      .mockResolvedValueOnce(parentTask("task_collect", "collect_sources", "Collect RAG evaluation sources"))
+      .mockResolvedValueOnce(childTool("source_collect", "source_collector", { topic: "RAG evaluation methods", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize", "synthesize_evidence", "Synthesize RAG evaluation sources"))
       .mockResolvedValueOnce(childTool("synthesize", "evidence_synthesizer", {}))
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "已完成 RAG 评估方法的证据整理。",
+        content: "Completed RAG evaluation evidence synthesis.",
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
     const synthesizeEvent = response.researchEvents.find((event) => event.toolName === "synthesize_evidence");
     const synthesizeCall = mocks.executeRegisteredTool.mock.calls.find(([name]) => name === "evidence_synthesizer");
 
     expect(synthesizeEvent?.status).toBe("completed");
     expect(synthesizeEvent?.error).toBeUndefined();
-    expect(JSON.stringify(response)).not.toContain("evidence_synthesizer 参数无效：focus");
+    expect(JSON.stringify(response)).not.toContain("evidence_synthesizer Invalid arguments: focus");
     expect(synthesizeCall?.[1]).toMatchObject({
       sources: [sampleSource],
-      focus: "帮我研究 RAG 评估方法",
+      focus: "Research RAG evaluation methods",
       outputFormat: "decision_brief"
     });
   });

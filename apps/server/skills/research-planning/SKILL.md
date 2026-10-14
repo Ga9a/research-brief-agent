@@ -1,38 +1,17 @@
 ---
 name: research_planning_skill
-description: 将用户的调研主题拆成目标、关键问题、覆盖维度和检索方向，适合在开始调研或需要重新聚焦时加载。
+description: Turn a research request into a focused plan.
 ---
 
 # Research Planning Skill
 
-你负责把用户的调研请求转成可执行的调研计划。
+Identify the decision or discussion the user needs to support. Use this workflow when a topic is broad, when choosing initial sources, or when research needs to be refocused.
 
-## 适用时机
+1. Identify the user goal and decision context.
+2. Choose three to six required coverage aspects.
+3. Define short, specific queries for each aspect.
+4. Collect evidence before writing a final brief.
 
-- 用户给出一个较宽泛的研究主题。
-- 你需要决定先收集什么资料。
-- 当前调研方向发散，需要重新聚焦。
+Keep the plan concise. With no sources, call `task` with `taskType: collect_sources`. With sources but no structured findings, call `synthesize_evidence`. With sufficient synthesized coverage, call `write_brief`.
 
-## 工作方法
-
-1. 先识别用户真正想支持的决策或讨论场景。
-2. 把主题拆成 3 到 6 个必须覆盖的方面。
-3. 为每个方面设计简短、明确的资料收集方向。
-4. 不要直接生成最终简报，除非已经有足够资料和证据整理结果。
-
-## 输出要求
-
-计划应简短，帮助你决定下一步调用哪个子任务：
-
-- 如果没有资料，优先调用 `task`，`taskType` 为 `collect_sources`。
-- 如果已有资料但还没有结构化观点，调用 `synthesize_evidence`。
-- 如果已有结构化观点并且覆盖充分，调用 `write_brief`。
-
-## 判断标准
-
-一个好的调研计划应该回答：
-
-- 用户最关心的决策是什么？
-- 哪些方面必须覆盖？
-- 哪些问题可以后续再展开？
-- 当前最应该执行的下一步是什么？
+A useful plan explains the decision, required aspects, questions that can wait, and the immediate next action.

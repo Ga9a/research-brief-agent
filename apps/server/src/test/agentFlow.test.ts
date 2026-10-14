@@ -18,7 +18,7 @@ const { createToolCallKey, runAgentTurn } = await import("../agent/loop.js");
 const { validateTaskArgs } = await import("../agent/taskTool.js");
 
 const sourceOutput = {
-  topic: "RAG 评估方法",
+  topic: "RAG evaluation methods",
   sources: [
     {
       id: "papers:sample",
@@ -35,7 +35,7 @@ const sourceOutput = {
 };
 
 const extraSourceOutput = {
-  topic: "RAG 评估方法生产实践",
+  topic: "RAG evaluation production practices",
   sources: [
     {
       id: "web:practice",
@@ -52,7 +52,7 @@ const extraSourceOutput = {
 };
 
 const memorySourceOutput = {
-  topic: "AI 记忆框架",
+  topic: "AI memory frameworks",
   sources: [
     {
       id: "papers:memory",
@@ -70,59 +70,59 @@ const memorySourceOutput = {
 
 const synthesisOutput = {
   synthesis: {
-    focus: "面向组长讨论的 RAG 评估方案",
+    focus: "RAG evaluation for team discussion",
     outputFormat: "decision_brief",
     keyFindings: [
-      "RAG 评估需要同时覆盖检索质量、生成质量和端到端质量。",
-      "关键指标包括 faithfulness、answer relevancy、context precision 和 context recall。",
-      "RAGAS、TruLens、ARES、DeepEval 和 LangSmith 适合不同评估场景。",
-      "RGB、CRUD、KILT、Natural Questions 等数据集可用于 benchmark，生产实践还需要关注人工复核、成本和常见陷阱。"
+      "RAG evaluation covers retrieval, generation, and end-to-end quality.",
+      "Key metrics include faithfulness, answer relevancy, context precision, and context recall.",
+      "RAGAS, TruLens, ARES, DeepEval, and LangSmith address different evaluation needs.",
+      "RGB, CRUD, KILT, and Natural Questions support benchmarks. Production practice needs human review of costs and pitfalls."
     ],
     comparisons: [
-      { dimension: "指标", notes: "检索指标和生成指标需要分开看。" },
-      { dimension: "框架", notes: "RAGAS、TruLens、ARES、DeepEval、LangSmith 各有适用场景。" }
+      { dimension: "Metrics", notes: "Separate retrieval and generation metrics." },
+      { dimension: "Frameworks", notes: "RAGAS, TruLens, ARES, DeepEval, and LangSmith have different use cases." }
     ],
-    risksOrLimitations: ["资料覆盖仍需后续扩展，生产实践中需要关注人工复核、成本和常见陷阱。"],
-    recommendation: "先建立小样本评估框架，再逐步扩展。"
+    risksOrLimitations: ["Expand evidence coverage and review production risks, costs, and pitfalls."],
+    recommendation: "Build a small evaluation workflow, then expand."
   }
 };
 
 const memorySynthesisOutput = {
   synthesis: {
-    focus: "帮我研究 AI 记忆框架",
+    focus: "Research AI memory frameworks",
     outputFormat: "decision_brief",
-    keyFindings: ["AI 记忆框架需要区分短期上下文、长期记忆和检索策略。"],
-    comparisons: [{ dimension: "记忆类型", notes: "语义记忆和事件记忆适合不同任务。" }],
-    risksOrLimitations: ["长期记忆需要控制污染、过期和隐私问题。"],
-    recommendation: "先明确记忆写入、检索和遗忘策略，再选择框架。"
+    keyFindings: ["AI memory frameworks distinguish short-term context, long-term memory, and retrieval policies."],
+    comparisons: [{ dimension: "Memory types", notes: "Semantic and episodic memory serve different tasks." }],
+    risksOrLimitations: ["Long-term memory requires contamination, expiration, and privacy controls."],
+    recommendation: "Define memory write, retrieval, and forgetting policies before selection."
   }
 };
 
 const lowCoverageSynthesisOutput = {
   synthesis: {
-    focus: "RAG 评估体系",
+    focus: "RAG evaluation system",
     outputFormat: "decision_brief",
-    keyFindings: ["RAG 评估需要关注 faithfulness 和 context precision。"],
-    comparisons: [{ dimension: "指标", notes: "检索指标和生成指标需要分开看。" }],
-    risksOrLimitations: ["当前资料仍不完整。"],
-    recommendation: "继续补充资料后再写简报。"
+    keyFindings: ["RAG evaluation considers faithfulness and context precision."],
+    comparisons: [{ dimension: "Metrics", notes: "Separate retrieval and generation metrics." }],
+    risksOrLimitations: ["The evidence is still incomplete."],
+    recommendation: "Collect more evidence before writing."
   }
 };
 
 const briefOutput = {
   brief: {
-    title: "面向组长讨论的 RAG 评估方案调研简报",
-    conclusion: "建议先建立小样本评估框架。",
-    keyFindings: ["RAG 评估需要同时覆盖检索质量和答案忠实度。"],
-    comparisonAnalysis: "| 指标 | 检索指标和生成指标需要分开看。 |",
-    suggestedQuestions: ["我们需要优先支持哪个决策？"],
-    nextSteps: ["补充真实资料来源。"],
+    title: "RAG evaluation for team discussion Research brief",
+    conclusion: "Build a small evaluation workflow first.",
+    keyFindings: ["RAG evaluation covers retrieval quality and answer faithfulness."],
+    comparisonAnalysis: "| Metrics | Separate retrieval and generation metrics. |",
+    suggestedQuestions: ["Which decision should we support first?"],
+    nextSteps: ["Collect additional real sources."],
     content:
-      "# 面向组长讨论的 RAG 评估方案调研简报\n\n## 关键发现\n- RAG 评估需要同时覆盖检索质量和答案忠实度。"
+      "# RAG evaluation for team discussion Research brief\n\n## Key findings\n- RAG evaluation covers retrieval quality and answer faithfulness."
   }
 };
 
-describe("调研 Agent 流程", () => {
+describe("agentFlow", () => {
   beforeEach(() => {
     mocks.createChatCompletion.mockReset();
     mocks.executeRegisteredTool.mockReset();
@@ -136,24 +136,24 @@ describe("调研 Agent 流程", () => {
       if (name === "brief_writer") {
         return { output: JSON.stringify(briefOutput) };
       }
-      throw new Error(`未知工具：${name}`);
+      throw new Error(`Unknown tool: ${name}`);
     });
   });
 
-  it("相同工具参数顺序不同也会生成相同去重 key", () => {
+  it("normalizes tool arguments for deduplication", () => {
     expect(createToolCallKey("source_collector", { topic: "RAG", sourceTypes: ["web", "papers"] })).toBe(
       createToolCallKey("source_collector", { sourceTypes: ["web", "papers"], topic: "RAG" })
     );
   });
 
-  it("task instruction 为空时会自动补默认值", () => {
+  it("defaults an empty instruction", () => {
     expect(validateTaskArgs({ taskType: "synthesize_evidence", instruction: "" })).toMatchObject({
       taskType: "synthesize_evidence",
-      instruction: "根据用户问题和已有调研上下文完成该子任务。"
+      instruction: "Complete this subtask using the user question and available research context."
     });
   });
 
-  it("父智能体可以先按需加载 SKILL.md，加载过程不作为前端调研步骤展示", async () => {
+  it("loads skills without adding progress events", async () => {
     mocks.createChatCompletion
       .mockResolvedValueOnce({
         role: "assistant",
@@ -171,11 +171,11 @@ describe("调研 Agent 流程", () => {
       })
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "我会先明确调研目标，再决定是否需要收集资料。",
+        content: "I will clarify the research goal before deciding whether to collect sources.",
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我规划一个 RAG 评估方法调研" });
+    const response = await runAgentTurn({ message: "Plan research on RAG evaluation methods" });
     const secondCallMessages = mocks.createChatCompletion.mock.calls[1]?.[0].messages;
     const loadedSkillMessage = secondCallMessages.find(
       (message: { role: string; content: string | null }) =>
@@ -183,34 +183,34 @@ describe("调研 Agent 流程", () => {
     );
 
     expect(response.researchEvents).toHaveLength(0);
-    expect(response.messages.at(-1)?.content).toContain("明确调研目标");
+    expect(response.messages.at(-1)?.content).toContain("clarify the research goal");
     expect(loadedSkillMessage).toBeDefined();
   });
 
-  it("证据整理子工具缺少 focus 时会由后端注入用户调研目标", async () => {
+  it("injects missing synthesis focus", async () => {
     mocks.createChatCompletion
-      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "收集 RAG 评估方法资料"))
-      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG 评估方法", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "整理 RAG 评估方法资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "Collect RAG evaluation sources"))
+      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG evaluation methods", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "Synthesize RAG evaluation sources"))
       .mockResolvedValueOnce(childTool("synthesize_1", "evidence_synthesizer", {}))
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "已整理 RAG 评估方法的关键证据。",
+        content: "Synthesized key RAG evaluation evidence.",
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
     const synthesizeCall = mocks.executeRegisteredTool.mock.calls.find(([name]) => name === "evidence_synthesizer");
 
     expect(response.researchEvents.find((event) => event.toolName === "synthesize_evidence")?.status).toBe("completed");
     expect(synthesizeCall?.[1]).toMatchObject({
       sources: sourceOutput.sources,
-      focus: "帮我研究 RAG 评估方法",
+      focus: "Research RAG evaluation methods",
       outputFormat: "decision_brief"
     });
   });
 
-  it("整理证据覆盖不足时会把 coverage feedback 注入下一轮并阻止直接生成简报", async () => {
+  it("blocks writing with insufficient coverage", async () => {
     mocks.executeRegisteredTool.mockImplementation(async (name: string) => {
       if (name === "source_collector") {
         return { output: JSON.stringify(sourceOutput) };
@@ -221,42 +221,42 @@ describe("调研 Agent 流程", () => {
       if (name === "brief_writer") {
         return { output: JSON.stringify(briefOutput) };
       }
-      throw new Error(`未知工具：${name}`);
+      throw new Error(`Unknown tool: ${name}`);
     });
 
     mocks.createChatCompletion
-      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "收集 RAG 评估体系资料"))
-      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG 评估体系", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "整理 RAG 评估体系资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "Collect RAG evaluation system sources"))
+      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG evaluation system", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "Synthesize RAG evaluation system sources"))
       .mockResolvedValueOnce(childTool("synthesize_1", "evidence_synthesizer", {}))
-      .mockResolvedValueOnce(parentTask("task_brief_1", "write_brief", "生成中文调研简报"))
+      .mockResolvedValueOnce(parentTask("task_brief_1", "write_brief", "Write an English research brief"))
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "当前覆盖不足，已先暂停生成正式简报。",
+        content: "Coverage is insufficient, so brief generation is paused.",
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估体系" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation system" });
     const fifthCallMessages = mocks.createChatCompletion.mock.calls[4]?.[0].messages;
     const feedbackMessage = fifthCallMessages.find(
       (message: { role: string; content: string | null }) =>
-        message.role === "system" && message.content?.includes("coverage feedback：当前证据覆盖不足")
+        message.role === "system" && message.content?.includes("Coverage feedback: evidence is incomplete")
     );
 
-    expect(feedbackMessage?.content).toContain("下一步必须调用 task: collect_sources");
+    expect(feedbackMessage?.content).toContain("Next call task: collect_sources");
     expect(response.researchEvents.at(-1)).toMatchObject({
       toolName: "write_brief",
       status: "failed"
     });
-    expect(response.researchEvents.at(-1)?.error).toContain("当前证据覆盖率只有");
+    expect(response.researchEvents.at(-1)?.error).toContain("Evidence coverage is");
     expect(mocks.executeRegisteredTool.mock.calls.some(([name]) => name === "brief_writer")).toBe(false);
   });
 
-  it("同一个 session 的新主题不会默认复用上一轮旧产物", async () => {
+  it("isolates artifacts between topics", async () => {
     mocks.executeRegisteredTool.mockImplementation(async (name: string, args: Record<string, unknown>) => {
       if (name === "source_collector") {
         return {
-          output: JSON.stringify(String(args.topic || "").includes("记忆") ? memorySourceOutput : sourceOutput)
+          output: JSON.stringify(String(args.topic || "").includes("memory") ? memorySourceOutput : sourceOutput)
         };
       }
       if (name === "evidence_synthesizer") {
@@ -269,31 +269,31 @@ describe("调研 Agent 流程", () => {
       if (name === "brief_writer") {
         return { output: JSON.stringify(briefOutput) };
       }
-      throw new Error(`未知工具：${name}`);
+      throw new Error(`Unknown tool: ${name}`);
     });
 
     mocks.createChatCompletion
-      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "收集 RAG 评估方法资料"))
-      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG 评估方法", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "整理 RAG 评估方法资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "Collect RAG evaluation sources"))
+      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG evaluation methods", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "Synthesize RAG evaluation sources"))
       .mockResolvedValueOnce(childTool("synthesize_1", "evidence_synthesizer", {}))
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "RAG 评估方法调研已完成。",
+        content: "RAG evaluation methodsResearch completed.",
         tool_calls: []
       })
-      .mockResolvedValueOnce(parentTask("task_collect_2", "collect_sources", "收集 AI 记忆框架资料"))
-      .mockResolvedValueOnce(childTool("collect_2", "source_collector", { topic: "AI 记忆框架", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize_2", "synthesize_evidence", "整理 AI 记忆框架资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_2", "collect_sources", "Collect AI memory framework sources"))
+      .mockResolvedValueOnce(childTool("collect_2", "source_collector", { topic: "AI memory frameworks", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize_2", "synthesize_evidence", "Synthesize AI memory framework sources"))
       .mockResolvedValueOnce(childTool("synthesize_2", "evidence_synthesizer", {}))
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "AI 记忆框架调研已完成。",
+        content: "AI memory frameworksResearch completed.",
         tool_calls: []
       });
 
-    const first = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
-    await runAgentTurn({ sessionId: first.sessionId, message: "帮我研究 AI 记忆框架" });
+    const first = await runAgentTurn({ message: "Research RAG evaluation methods" });
+    await runAgentTurn({ sessionId: first.sessionId, message: "Research AI memory frameworks" });
 
     const synthesizeCalls = mocks.executeRegisteredTool.mock.calls.filter(([name]) => name === "evidence_synthesizer");
     const secondSynthesizeArgs = synthesizeCalls.at(-1)?.[1] as { sources?: unknown[]; focus?: string };
@@ -302,12 +302,12 @@ describe("调研 Agent 流程", () => {
 
     expect(secondSynthesizeArgs.sources).toEqual(memorySourceOutput.sources);
     expect(JSON.stringify(secondSynthesizeArgs.sources)).not.toContain("RAG Evaluation Methods");
-    expect(secondSynthesizeArgs.focus).toBe("帮我研究 AI 记忆框架");
+    expect(secondSynthesizeArgs.focus).toBe("Research AI memory frameworks");
     expect(secondSourceArgs.topic).toContain("MemGPT");
     expect(secondSourceArgs.topic).toContain("Mem0");
   });
 
-  it("能完成资料收集到简报生成的完整流程", async () => {
+  it("completes the research workflow", async () => {
     mocks.createChatCompletion
       .mockResolvedValueOnce({
         role: "assistant",
@@ -320,7 +320,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "collect_sources",
-                instruction: "围绕 RAG 评估方法收集 web 和 papers 来源"
+                instruction: "Collect web and paper sources on RAG evaluation methods"
               })
             }
           }
@@ -336,7 +336,7 @@ describe("调研 Agent 流程", () => {
             function: {
               name: "source_collector",
               arguments: JSON.stringify({
-                topic: "RAG 评估方法",
+                topic: "RAG evaluation methods",
                 sourceTypes: ["web", "papers"],
                 maxResults: 6,
                 recency: "balanced"
@@ -356,7 +356,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "synthesize_evidence",
-                instruction: "把已收集资料整理成面向组长讨论的 RAG 评估方案"
+                instruction: "Synthesize collected sources for a team discussion on RAG evaluation"
               })
             }
           }
@@ -372,7 +372,7 @@ describe("调研 Agent 流程", () => {
             function: {
               name: "evidence_synthesizer",
               arguments: JSON.stringify({
-                focus: "面向组长讨论的 RAG 评估方案",
+                focus: "RAG evaluation for team discussion",
                 outputFormat: "decision_brief"
               })
             }
@@ -390,7 +390,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "write_brief",
-                instruction: "生成适合和组长讨论的中等长度中文调研简报"
+                instruction: "Write a medium-length English brief for team discussion"
               })
             }
           }
@@ -419,7 +419,7 @@ describe("调研 Agent 流程", () => {
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
     const finalContent = response.messages.at(-1)?.content || "";
 
     expect(response.researchEvents.map((event) => event.toolName)).toEqual([
@@ -427,8 +427,8 @@ describe("调研 Agent 流程", () => {
       "synthesize_evidence",
       "write_brief"
     ]);
-    expect(finalContent).toContain("RAG 评估方案调研简报");
-    expect(finalContent).toContain("## 关键发现");
+    expect(finalContent).toContain("RAG evaluation for team discussion Research brief");
+    expect(finalContent).toContain("## Key findings");
     for (const legacyTerm of ["nm" + "ap", "port" + " scan", "host" + " discovery"]) {
       expect(finalContent.toLowerCase()).not.toContain(legacyTerm);
     }
@@ -437,7 +437,7 @@ describe("调研 Agent 流程", () => {
     const briefCall = mocks.executeRegisteredTool.mock.calls.find(([name]) => name === "brief_writer");
     expect(synthesizeCall?.[1]).toMatchObject({
       sources: sourceOutput.sources,
-      focus: "面向组长讨论的 RAG 评估方案",
+      focus: "RAG evaluation for team discussion",
       outputFormat: "decision_brief"
     });
     expect(briefCall?.[1]).toMatchObject({
@@ -447,15 +447,15 @@ describe("调研 Agent 流程", () => {
     });
     expect(response.researchEvents.find((event) => event.toolName === "synthesize_evidence")?.args).toEqual({
       taskType: "synthesize_evidence",
-      instruction: "把已收集资料整理成面向组长讨论的 RAG 评估方案"
+      instruction: "Synthesize collected sources for a team discussion on RAG evaluation"
     });
     expect(response.researchEvents.find((event) => event.toolName === "write_brief")?.args).toEqual({
       taskType: "write_brief",
-      instruction: "生成适合和组长讨论的中等长度中文调研简报"
+      instruction: "Write a medium-length English brief for team discussion"
     });
   });
 
-  it("不会把明显的内部函数名作为最终主消息返回", async () => {
+  it("hides internal function names", async () => {
     mocks.createChatCompletion
       .mockResolvedValueOnce({
         role: "assistant",
@@ -468,7 +468,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "collect_sources",
-                instruction: "收集 RAG 评估方法资料"
+                instruction: "Collect RAG evaluation sources"
               })
             }
           }
@@ -484,7 +484,7 @@ describe("调研 Agent 流程", () => {
             function: {
               name: "source_collector",
               arguments: JSON.stringify({
-                topic: "RAG 评估方法",
+                topic: "RAG evaluation methods",
                 sourceTypes: ["papers"]
               })
             }
@@ -493,38 +493,38 @@ describe("调研 Agent 流程", () => {
       })
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "task 已经完成。",
+        content: "task completed.",
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
 
     expect(response.messages.at(-1)?.content).not.toContain("source_collector");
     expect(response.messages.at(-1)?.content).not.toContain("task");
   });
 
-  it("最终回答不会把上下文污染诊断暴露给用户", async () => {
+  it("hides context diagnostics", async () => {
     mocks.createChatCompletion
-      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "收集 RAG 评估方法资料"))
-      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG 评估方法", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "整理 RAG 评估方法资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "Collect RAG evaluation sources"))
+      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG evaluation methods", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "Synthesize RAG evaluation sources"))
       .mockResolvedValueOnce(childTool("synthesize_1", "evidence_synthesizer", {}))
-      .mockResolvedValueOnce(parentTask("task_brief_1", "write_brief", "生成中文调研简报"))
+      .mockResolvedValueOnce(parentTask("task_brief_1", "write_brief", "Write an English research brief"))
       .mockResolvedValueOnce(childTool("brief_1", "brief_writer", { audience: "self_learning", length: "medium" }))
       .mockResolvedValueOnce({
         role: "assistant",
-        content: "可以看到简报的内容被之前的 RAG 评估上下文污染了。",
+        content: "The brief was contaminated by previous RAG evaluation context contamination.",
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
 
-    expect(response.messages.at(-1)?.content).toContain("RAG 评估方案调研简报");
-    expect(response.messages.at(-1)?.content).not.toContain("上下文污染");
-    expect(response.messages.at(-1)?.content).not.toContain("污染");
+    expect(response.messages.at(-1)?.content).toContain("RAG evaluation for team discussion Research brief");
+    expect(response.messages.at(-1)?.content).not.toContain("context contamination");
+    expect(response.messages.at(-1)?.content).not.toContain("contamination");
   });
 
-  it("资料收集出现配置或限流错误后停止继续调用工具", async () => {
+  it("stops on collection errors", async () => {
     mocks.executeRegisteredTool.mockRejectedValueOnce(new Error("Missing SEARCH_API_KEY for web search"));
     mocks.createChatCompletion
       .mockResolvedValueOnce({
@@ -538,7 +538,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "collect_sources",
-                instruction: "收集 RAG 评估方法 web 资料"
+                instruction: "Collect web sources on RAG evaluation methods"
               })
             }
           }
@@ -554,7 +554,7 @@ describe("调研 Agent 流程", () => {
             function: {
               name: "source_collector",
               arguments: JSON.stringify({
-                topic: "RAG 评估方法",
+                topic: "RAG evaluation methods",
                 sourceTypes: ["web"]
               })
             }
@@ -562,15 +562,15 @@ describe("调研 Agent 流程", () => {
         ]
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
 
     expect(mocks.createChatCompletion).toHaveBeenCalledTimes(2);
     expect(response.researchEvents).toHaveLength(1);
-    expect(response.messages.at(-1)?.content).toContain("调研暂时无法继续");
+    expect(response.messages.at(-1)?.content).toContain("Research could not continue");
     expect(response.messages.at(-1)?.content).toContain("SEARCH_API_KEY");
   });
 
-  it("允许整理后追加资料并在下一次整理时合并多批来源", async () => {
+  it("merges additional source batches", async () => {
     let collectCount = 0;
     mocks.executeRegisteredTool.mockImplementation(async (name: string) => {
       if (name === "source_collector") {
@@ -583,35 +583,35 @@ describe("调研 Agent 流程", () => {
       if (name === "brief_writer") {
         return { output: JSON.stringify(briefOutput) };
       }
-      throw new Error(`未知工具：${name}`);
+      throw new Error(`Unknown tool: ${name}`);
     });
 
     mocks.createChatCompletion
-      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "先收集 RAG 评估方法资料"))
-      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG 评估方法", sourceTypes: ["papers"] }))
-      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "先整理已有资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_1", "collect_sources", "Collect initial RAG evaluation sources"))
+      .mockResolvedValueOnce(childTool("collect_1", "source_collector", { topic: "RAG evaluation methods", sourceTypes: ["papers"] }))
+      .mockResolvedValueOnce(parentTask("task_synthesize_1", "synthesize_evidence", "Synthesize existing sources first"))
       .mockResolvedValueOnce(
         childTool("synthesize_1", "evidence_synthesizer", {
-          focus: "面向组长讨论的 RAG 评估方案",
+          focus: "RAG evaluation for team discussion",
           outputFormat: "decision_brief"
         })
       )
-      .mockResolvedValueOnce(parentTask("task_collect_2", "collect_sources", "补充收集 RAG 评估的生产实践资料"))
+      .mockResolvedValueOnce(parentTask("task_collect_2", "collect_sources", "Collect additional RAG production evaluation sources"))
       .mockResolvedValueOnce(
         childTool("collect_2", "source_collector", {
-          topic: "RAG 评估生产实践",
+          topic: "RAG evaluation production practices",
           sourceTypes: ["web"],
           maxResults: 3
         })
       )
-      .mockResolvedValueOnce(parentTask("task_synthesize_2", "synthesize_evidence", "结合两批资料重新整理"))
+      .mockResolvedValueOnce(parentTask("task_synthesize_2", "synthesize_evidence", "Synthesize both source batches"))
       .mockResolvedValueOnce(
         childTool("synthesize_2", "evidence_synthesizer", {
-          focus: "面向组长讨论的 RAG 评估方案",
+          focus: "RAG evaluation for team discussion",
           outputFormat: "decision_brief"
         })
       )
-      .mockResolvedValueOnce(parentTask("task_brief_1", "write_brief", "生成最终中文简报"))
+      .mockResolvedValueOnce(parentTask("task_brief_1", "write_brief", "Write the final English brief"))
       .mockResolvedValueOnce(childTool("brief_1", "brief_writer", { audience: "team_lead", length: "medium" }))
       .mockResolvedValueOnce({
         role: "assistant",
@@ -619,7 +619,7 @@ describe("调研 Agent 流程", () => {
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法，如果资料不够可以补充收集" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods, collect more sources if evidence is insufficient" });
     const synthesizeCalls = mocks.executeRegisteredTool.mock.calls.filter(([name]) => name === "evidence_synthesizer");
 
     expect(response.researchEvents.map((event) => event.toolName)).toEqual([
@@ -631,12 +631,12 @@ describe("调研 Agent 流程", () => {
     ]);
     expect(synthesizeCalls.at(-1)?.[1]).toMatchObject({
       sources: [...sourceOutput.sources, ...extraSourceOutput.sources],
-      focus: "面向组长讨论的 RAG 评估方案",
+      focus: "RAG evaluation for team discussion",
       outputFormat: "decision_brief"
     });
   });
 
-  it("能修复 brief_writer 参数末尾多出属性片段的 JSON", async () => {
+  it("repairs malformed brief arguments", async () => {
     const malformedBriefArgs = `${JSON.stringify({ synthesis: synthesisOutput.synthesis })},"audience":"team_lead","length":"medium"`;
     mocks.createChatCompletion
       .mockResolvedValueOnce({
@@ -650,7 +650,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "collect_sources",
-                instruction: "收集 RAG 评估方法资料"
+                instruction: "Collect RAG evaluation sources"
               })
             }
           }
@@ -666,7 +666,7 @@ describe("调研 Agent 流程", () => {
             function: {
               name: "source_collector",
               arguments: JSON.stringify({
-                topic: "RAG 评估方法",
+                topic: "RAG evaluation methods",
                 sourceTypes: ["papers"]
               })
             }
@@ -684,7 +684,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "synthesize_evidence",
-                instruction: "整理 RAG 评估方法资料"
+                instruction: "Synthesize RAG evaluation sources"
               })
             }
           }
@@ -700,7 +700,7 @@ describe("调研 Agent 流程", () => {
             function: {
               name: "evidence_synthesizer",
               arguments: JSON.stringify({
-                focus: "面向组长讨论的 RAG 评估方案",
+                focus: "RAG evaluation for team discussion",
                 outputFormat: "decision_brief"
               })
             }
@@ -718,7 +718,7 @@ describe("调研 Agent 流程", () => {
               name: "task",
               arguments: JSON.stringify({
                 taskType: "write_brief",
-                instruction: "生成适合和组长讨论的中等长度中文调研简报"
+                instruction: "Write a medium-length English brief for team discussion"
               })
             }
           }
@@ -744,7 +744,7 @@ describe("调研 Agent 流程", () => {
         tool_calls: []
       });
 
-    const response = await runAgentTurn({ message: "帮我研究 RAG 评估方法" });
+    const response = await runAgentTurn({ message: "Research RAG evaluation methods" });
     const briefCall = mocks.executeRegisteredTool.mock.calls.find(([name]) => name === "brief_writer");
 
     expect(response.researchEvents.at(-1)).toMatchObject({ toolName: "write_brief", status: "completed" });

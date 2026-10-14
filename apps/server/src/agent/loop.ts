@@ -75,27 +75,27 @@ const systemPrompt: DeepSeekMessage = {
 
 function buildSystemPrompt(): string {
   return [
-    "你是 Research Brief Agent 的父智能体，一个安全的中文调研助手。",
-    "你的任务是拆分调研流程、通过 task 工具派发独立子任务，并在子任务完成后输出自然的中文调研简报。",
-    "你可以调用 task 工具执行调研子任务，也可以调用 load_skill 按需加载 SKILL.md 的完整工作流说明。",
-    "不要把所有技能正文一次性写入上下文；先根据下方技能名称和简介判断是否需要，再通过 load_skill 加载。",
+    "You are the parent agent for Research Brief Agent, an English-language research assistant.",
+    "Break down the research workflow, dispatch independent subtasks through task, and produce a clear English research brief.",
+    "Use task for research subtasks and load_skill to load a complete SKILL.md workflow when needed.",
+    "Read skill names and descriptions first, then load only the workflows needed through load_skill.",
     "",
-    "可用技能（只展示简介，完整内容需要 load_skill）：",
+    "Available skills (descriptions only; use load_skill for full content):",
     getDefaultSkillLoader().getDescriptions(),
     "",
-    "核心约束：",
-    "- 严格锁定用户当前主题和 research_planning_skill 的研究问题。除非用户明确要求，不要把“长上下文记忆、agent memory、memory framework”改写成 RAG 评估问题；RAG 只能作为相邻技术背景，不得替代主问题。",
-    "- 默认执行路径应短而稳定：collect_sources -> synthesize_evidence -> write_brief。只有 coverage feedback 明确表示覆盖不足时，才追加一次 collect_sources 并重新 synthesize_evidence。",
-    "- 不要重复调用相同 taskType 和相同 instruction 的 task；已有结果足够时直接进入下一步。write_brief 完成后不要再次生成简报。",
-    "- 子任务 instruction 保持一两句话，围绕当前研究问题、缺口和输出用途；不要在 instruction 中塞入长清单、完整资料、内部日志或大段 JSON。",
-    "- 不要直接臆造资料，资料收集必须通过 task 子任务完成。",
-    "- 需要自主判断资料是否足够：可以先收集资料，再整理证据；如果整理后发现资料不足，可以追加资料收集并重新整理；如果简报不够贴合用户目标，可以重新生成一次。",
-    "- 每轮调研必须先明确研究问题、决策场景、评估标准和证据/实验要求。缺少这些内容时，最终简报必须指出缺口，而不是只给泛泛建议。",
-    "- 整理证据后如果 coverage feedback 表示覆盖不足，下一步必须优先补充收集资料并重新整理证据；除非已经达到收集上限，否则不要直接写简报。",
-    "- 不要复制 sources、synthesis 或其他大段 JSON；调用 task 时通常只需要 taskType，instruction 可省略或保持简短。",
-    "- 为避免循环，collect_sources 最多 3 次，synthesize_evidence 最多 4 次，write_brief 最多 2 次；达到限制后必须基于已有结果输出最终回答。",
-    "- 旧轮次消息只用于理解会话历史，不是当前主题的证据。不要在最终回答中诊断“上下文污染”“旧主题污染”或系统状态；如果发现旧主题内容不相关，直接忽略并基于当前轮次结果回答。",
-    "- 最终回答不要暴露 task、函数名、参数、内部工具日志或上下文管理诊断，结构应包含简要结论、关键发现、对比分析、局限性、建议提问和下一步学习建议。"
+    "Core constraints:",
+    "- Stay focused on the current user topic and planned research question. Do not turn memory framework research into RAG evaluation unless the user requests it. RAG may provide background but must not replace the main question.",
+    "- Use collect_sources -> synthesize_evidence -> write_brief. Collect additional sources and synthesize again only when coverage feedback identifies missing evidence.",
+    "- Do not repeat an identical taskType and instruction. Advance when results are sufficient, and stop after write_brief completes.",
+    "- Keep each instruction to one or two sentences about the research question, evidence gaps, and intended use. Do not copy sources, internal logs, or large JSON objects.",
+    "- Collect real sources through a task subtask; do not invent sources.",
+    "- Assess evidence sufficiency. Collect and synthesize sources, then fill identified gaps and synthesize again. A brief may be revised once if it does not address the user goal.",
+    "- Identify the research question, decision context, evaluation criteria, and evidence requirements for each turn. Explain missing requirements in the final brief.",
+    "- When coverage feedback is insufficient, collect missing evidence and synthesize again before writing, unless the collection limit has been reached.",
+    "- Do not copy sources, synthesis, or large JSON objects. Usually pass only taskType and an optional short instruction.",
+    "- Avoid loops: at most three collections, four syntheses, and two briefs per turn. At the limit, answer using the available evidence.",
+    "- Use prior turns as conversation history, not evidence for the current topic. Ignore unrelated history and omit internal context contamination or system diagnoses from the answer.",
+    "- Write the final answer in English with a conclusion, key findings, comparison, limitations, suggested questions, and next steps. Omit internal function names, parameters, logs, and context diagnoses."
   ].join("\n");
 }
 
@@ -108,7 +108,7 @@ export async function runAgentTurn(
   const state = getSession(sessionId);
   const userContent = input.message.trim();
   if (!userContent) {
-    throw new Error("消息不能为空。");
+    throw new Error("The message must not be empty.");
   }
 
   ensureHookCanContinue(await hookRunner.sessionStarted({ sessionId }));
@@ -122,7 +122,7 @@ export async function runAgentTurn(
       createdAt: new Date().toISOString()
     });
     state.modelMessages = state.contextBudget.forceSummaryCompact(state.modelMessages, buildCompactContext(state, getLatestUserGoal(state)));
-    appendFinalAssistantMessage(state, "已完成上下文压缩。旧工具输出没有删除，仍可通过摘要中的 persisted-output 路径追踪。", []);
+    appendFinalAssistantMessage(state, "Context compacted. Earlier tool outputs remain available through persisted-output references in the summary.", []);
     return await finalizeResponse(sessionId, state, hookRunner);
   }
 
@@ -140,7 +140,7 @@ export async function runAgentTurn(
   state.modelMessages.push({ role: "system", content: renderResearchPlanForModel(researchPlan) });
   state.modelMessages.push({
     role: "system",
-    content: `当前轮次 ID：${turnId}。默认只使用当前轮次产生的资料、证据和简报；除非用户明确要求复用上一轮结果，否则不要引用旧主题产物。`
+    content: `Current turn ID: ${turnId}. Use only this turn sources, evidence, and briefs unless the user explicitly requests earlier results.`
   });
 
   const turnEvents: ResearchToolEvent[] = [];
@@ -159,7 +159,7 @@ export async function runAgentTurn(
         tools: [taskToolDefinition, loadSkillToolDefinition]
       });
     } catch (error) {
-      const fallback = buildFallbackFinal(turnEvents, `模型调用失败或超时：${formatError(error)}`);
+      const fallback = buildFallbackFinal(turnEvents, `Model call failed or timed out: ${formatError(error)}`);
       if (fallback) {
         appendFinalAssistantMessage(state, fallback, turnEvents, researchPlan);
         return await finalizeResponse(sessionId, state, hookRunner);
@@ -193,7 +193,7 @@ export async function runAgentTurn(
 
       try {
         if (toolName !== "task") {
-          throw new Error(`父智能体只能调用 task 或 load_skill 工具，不能调用 ${toolName}。`);
+          throw new Error(`The parent can call only task or load_skill, not ${toolName}.`);
         }
 
         parsedArgs = parseToolArguments(toolCall.function.arguments);
@@ -208,7 +208,7 @@ export async function runAgentTurn(
               JSON.stringify({
                 status: "skipped",
                 reason: "duplicate_tool_call",
-                message: "本轮已经执行过相同参数的步骤，请直接使用已有结果并进入下一步，不要重复调用。"
+                message: "This step has already run with the same arguments. Use the existing result and advance."
               })
             )
           });
@@ -265,7 +265,7 @@ export async function runAgentTurn(
       if (isSourceCollectionBlockingFailure(researchEvent)) {
         appendFinalAssistantMessage(
           state,
-          buildSourceCollectionFailureSummary(researchEvent.error || "资料收集失败。"),
+          buildSourceCollectionFailureSummary(researchEvent.error || "Source collection failed."),
           turnEvents,
           researchPlan
         );
@@ -275,7 +275,7 @@ export async function runAgentTurn(
       if (researchEvent.toolName === "write_brief" && researchEvent.status === "completed") {
         appendFinalAssistantMessage(
           state,
-          getLatestBriefContent(turnEvents) || buildFallbackFinal(turnEvents, "简报工具已完成，但未解析到结构化简报内容。") || "调研简报已生成。",
+          getLatestBriefContent(turnEvents) || buildFallbackFinal(turnEvents, "The brief tool completed, but no structured brief was parsed.") || "Research brief generated.",
           turnEvents,
           researchPlan
         );
@@ -286,8 +286,8 @@ export async function runAgentTurn(
 
   appendFinalAssistantMessage(
     state,
-    buildFallbackFinal(turnEvents, `已达到最大工具调用轮数 ${maxToolRounds}，为避免循环，已停止继续调用。`) ||
-      "这轮调研没有生成可用简报，请缩小主题或补充更明确的关注点。",
+    buildFallbackFinal(turnEvents, `Reached the maximum of ${maxToolRounds} tool rounds; stopped to avoid a loop.`) ||
+      "No usable brief was generated. Narrow the topic or specify the focus.",
     turnEvents,
     researchPlan
   );
@@ -311,7 +311,7 @@ function getSession(sessionId: string): SessionState {
   const created: SessionState = {
     metadata: {
       id: sessionId,
-      title: "新会话",
+      title: "New session",
       createdAt: now,
       updatedAt: now
     },
@@ -364,7 +364,7 @@ function hydrateSessionState(record: PersistedSessionRecord): SessionState {
   return {
     metadata: {
       id: record.id,
-      title: record.title || "新会话",
+      title: record.title || "New session",
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
     },
@@ -415,7 +415,7 @@ function updateSessionTitleFromUserMessage(state: SessionState, content: string)
 
 function createSessionTitle(content: string): string {
   const normalized = content.replace(/\s+/g, " ").trim();
-  return truncateText(normalized, 28) || "新会话";
+  return truncateText(normalized, 28) || "New session";
 }
 
 function truncateText(value: string, maxLength: number): string {
@@ -590,15 +590,15 @@ function validateTaskPolicy(taskArgs: TaskToolArgs, turnEvents: ResearchToolEven
   const taskType = taskArgs.taskType;
   const completedCount = countCompletedTask(turnEvents, taskType);
   if (completedCount >= TASK_LIMITS[taskType]) {
-    return `“${taskStepLabels[taskType]}”已达到本轮上限 ${TASK_LIMITS[taskType]} 次，请基于已有结果继续判断或输出最终简报。`;
+    return `"${taskStepLabels[taskType]}" reached its limit of ${TASK_LIMITS[taskType]} calls for this turn. Use existing results to proceed or answer.`;
   }
 
   if (taskType === "synthesize_evidence" && countCompletedTask(turnEvents, "collect_sources") === 0) {
-    return "整理证据前必须先完成至少一次资料收集。";
+    return "Collect sources before synthesizing evidence.";
   }
 
   if (taskType === "write_brief" && countCompletedTask(turnEvents, "synthesize_evidence") === 0) {
-    return "生成简报前必须先完成至少一次证据整理。";
+    return "Synthesize evidence before writing a brief.";
   }
 
   if (taskType === "write_brief") {
@@ -606,9 +606,9 @@ function validateTaskPolicy(taskArgs: TaskToolArgs, turnEvents: ResearchToolEven
     const remainingCollections = TASK_LIMITS.collect_sources - countCompletedTask(turnEvents, "collect_sources");
     if (coverage?.shouldCollectMore && remainingCollections > 0) {
       return [
-        `当前证据覆盖率只有 ${Math.round(coverage.coverageScore * 100)}%，仍缺：${coverage.missingAspects.join("、") || "若干关键方面"}。`,
-        `请先调用 collect_sources 补充资料，建议检索：${coverage.suggestedQueries.join("；") || "围绕缺口补充检索"}。`,
-        "补充收集完成后必须再次调用 synthesize_evidence，再判断是否可以生成简报。"
+        `Evidence coverage is ${Math.round(coverage.coverageScore * 100)}%. Missing: ${coverage.missingAspects.join(", ") || "several key aspects"}.`,
+        `Call collect_sources first. Suggested queries: ${coverage.suggestedQueries.join("; ") || "search the identified evidence gaps"}.`,
+        "After collecting additional sources, call synthesize_evidence again before deciding whether to write a brief."
       ].join("");
     }
   }
@@ -667,23 +667,23 @@ function buildCoverageFeedbackForModel(event: ResearchToolEvent, turnEvents: Res
   const remainingCollections = TASK_LIMITS.collect_sources - countCompletedTask(turnEvents, "collect_sources");
   if (!coverage.shouldCollectMore || remainingCollections <= 0) {
     return [
-      "coverage feedback：",
-      `当前覆盖率为 ${Math.round(coverage.coverageScore * 100)}%。`,
-      "可以进入 write_brief；如果最终回答使用部分证据，请明确写出局限性。",
-      "不要把本段 feedback 原样写给用户。"
+      "coverage feedback: ",
+      `Current coverage: ${Math.round(coverage.coverageScore * 100)}%.`,
+      "Proceed to write_brief, explaining limitations when the evidence is incomplete.",
+      "Do not reproduce this internal feedback in the answer."
     ].join("\n");
   }
 
   return [
-    "coverage feedback：当前证据覆盖不足，这是一条控制下一步行动的内部反馈。",
-    `覆盖率：${Math.round(coverage.coverageScore * 100)}%。`,
-    `已覆盖：${coverage.coveredAspects.join("、") || "暂无"}`,
-    `仍缺：${coverage.missingAspects.join("、") || "未识别到具体缺口"}`,
-    `建议补充检索：${coverage.suggestedQueries.join("；") || "围绕缺口补充检索"}`,
-    `剩余资料收集次数：${remainingCollections}。`,
-    "下一步必须调用 task: collect_sources，instruction 要围绕上述缺口和建议检索式；补充收集后必须再次调用 synthesize_evidence。",
-    "除非资料收集次数已用完，不要直接调用 write_brief。",
-    "不要把 coverage feedback、工具名、上下文污染诊断或内部控制逻辑写进最终用户回答。"
+    "Coverage feedback: evidence is incomplete. Use this internal feedback to choose the next action.",
+    `Coverage: ${Math.round(coverage.coverageScore * 100)}%.`,
+    `Covered: ${coverage.coveredAspects.join(", ") || "None"}`,
+    `Missing: ${coverage.missingAspects.join(", ") || "no specific gaps identified"}`,
+    `Additional queries: ${coverage.suggestedQueries.join("; ") || "search the identified evidence gaps"}`,
+    `Remaining collections: ${remainingCollections}.`,
+    "Next call task: collect_sources with a short instruction targeting the listed gaps and queries. Then call synthesize_evidence again.",
+    "Do not call write_brief while evidence gaps remain unless the collection limit is exhausted.",
+    "Omit coverage feedback, internal tool names, context diagnoses, and control logic from the final answer."
   ].join("\n");
 }
 
@@ -758,13 +758,13 @@ function appendFinalAssistantMessage(
 function renderSessionMemoryForModel(memory: SessionResearchMemory, currentPlan: ResearchPlan): string {
   const completed = memory.completedTopics.slice(-5);
   return [
-    "会话研究记忆：",
+    "Session research memory:",
     completed.length > 0
-      ? `已完成主题：${completed.map((item) => `《${item.goal}》(${item.summary})`).join("；")}`
-      : "已完成主题：暂无。",
-    `当前轮次主题：${currentPlan.researchGoal}`,
-    `当前轮次研究问题：${currentPlan.researchQuestion}`,
-    "规则：保留用户多轮研究脉络，但当前轮次的资料、证据和简报只能来自当前 turnId 的工具产物；旧主题只能作为历史背景，不能当作当前主题证据。"
+      ? `Completed topics: ${completed.map((item) => `[${item.goal}](${item.summary})`).join("; ")}`
+      : "Completed topics: None.",
+    `Current turn topic: ${currentPlan.researchGoal}`,
+    `Current turn research question: ${currentPlan.researchQuestion}`,
+    "Preserve the research history, but use only artifacts from the current turnId as evidence unless the user explicitly requests earlier results."
   ].join("\n");
 }
 
@@ -785,7 +785,7 @@ function updateSessionResearchMemory(
     goal: plan.researchGoal,
     researchQuestion: plan.researchQuestion,
     completedAt: new Date().toISOString(),
-    summary: `${summary}${completedCount > 0 ? `；完成 ${completedCount} 个步骤` : ""}`
+    summary: `${summary}${completedCount > 0 ? `; completed ${completedCount} steps` : ""}`
   };
 
   memory.completedTopics = [
@@ -796,7 +796,7 @@ function updateSessionResearchMemory(
 
 function truncateMemorySummary(value: string): string {
   const compact = value.replace(/[#*_`>|-]/g, "").replace(/\s+/g, " ").trim();
-  return compact.length > 120 ? `${compact.slice(0, 119)}…` : compact || "本轮未形成可用摘要";
+  return compact.length > 120 ? `${compact.slice(0, 119)}…` : compact || "No usable summary for this turn";
 }
 
 function buildReasoningSummary(turnEvents: ResearchToolEvent[]): ReasoningSummary | undefined {
@@ -808,8 +808,8 @@ function buildReasoningSummary(turnEvents: ResearchToolEvent[]): ReasoningSummar
   const failed = turnEvents.length - completed;
 
   return {
-    title: "调研过程",
-    summary: `本轮共完成 ${completed} 个步骤${failed > 0 ? `，有 ${failed} 个步骤未成功` : ""}。`,
+    title: "Research process",
+    summary: `Completed ${completed} steps this turn${failed > 0 ? `; ${failed} steps failed` : ""}.`,
     steps: turnEvents.map((event, index) => ({
       index: index + 1,
       label: event.stepLabel,
@@ -823,14 +823,14 @@ function buildReasoningSummary(turnEvents: ResearchToolEvent[]): ReasoningSummar
 
 function summarizeResearchResult(event: ResearchToolEvent): string {
   if (event.status === "failed") {
-    return event.error || "执行失败，未返回明确错误。";
+    return event.error || "Execution failed without error details.";
   }
 
   if (event.toolName === "collect_sources") {
     const payload = parseJson<{ sourceCount?: number; topSources?: Array<{ title: string }> }>(event.output);
     return payload?.sourceCount
-      ? `整理出 ${payload.sourceCount} 条候选资料，代表资料是“${payload.topSources?.[0]?.title || "候选资料"}”。`
-      : "资料收集已完成，但没有解析到候选资料。";
+      ? `Collected ${payload.sourceCount} candidate sources, including "${payload.topSources?.[0]?.title || "a candidate source"}".`
+      : "Source collection completed, but no candidate sources were parsed.";
   }
 
   if (event.toolName === "synthesize_evidence") {
@@ -838,37 +838,37 @@ function summarizeResearchResult(event: ResearchToolEvent): string {
       event.output
     );
     if (payload?.coverage) {
-      return `形成 ${payload.keyFindings?.length ?? 0} 条关键发现，覆盖率 ${Math.round(
+      return `Identified ${payload.keyFindings?.length ?? 0} key findings, coverage ${Math.round(
         payload.coverage.coverageScore * 100
-      )}%${payload.coverage.missingAspects.length > 0 ? `，仍缺：${payload.coverage.missingAspects.join("、")}` : "。"}`;
+      )}%${payload.coverage.missingAspects.length > 0 ? `, Missing: ${payload.coverage.missingAspects.join(", ")}` : "."}`;
     }
     return payload?.keyFindings
-      ? `形成 ${payload.keyFindings.length} 条关键发现，并给出初步建议。`
-      : "证据整理已完成，但没有解析到结构化结果。";
+      ? `Identified ${payload.keyFindings.length} key findings and initial recommendations.`
+      : "Synthesis completed, but no structured result was parsed.";
   }
 
   if (event.toolName === "write_brief") {
     const brief = extractBrief(event.output);
-    return brief ? `生成《${brief.title}》。` : "简报生成已完成。";
+    return brief ? `Created "${brief.title}".` : "Brief generation completed.";
   }
 
-  return "步骤已完成。";
+  return "Step completed.";
 }
 
 function normalizeAssistantContent(content: string | null, turnEvents: ResearchToolEvent[]): string {
   const fallback = getLatestBriefContent(turnEvents);
   if (!content?.trim()) {
-    return fallback || "调研已完成，但模型没有返回文本。";
+    return fallback || "Research completed without a model text response.";
   }
 
-  if (/上下文污染|旧主题污染|被之前.*污染|简报.*污染|内容.*污染/i.test(content)) {
-    return fallback || buildFallbackFinal(turnEvents, "模型返回了内部上下文诊断，已改写为当前轮次的用户可读结果。") || "调研已完成。";
+  if (/context contamination|old topic contamination|contaminated by (?:a )?previous|contaminated brief/i.test(content)) {
+    return fallback || buildFallbackFinal(turnEvents, "Internal context diagnostics were replaced with the current turn result.") || "Research completed.";
   }
 
   if (/task|collect_sources|synthesize_evidence|write_brief|source_collector|evidence_synthesizer|brief_writer|tool_calls|function/i.test(
     content
   )) {
-    return fallback || buildFallbackFinal(turnEvents, "模型返回了内部步骤名称，已改写为用户可读摘要。") || "调研已完成。";
+    return fallback || buildFallbackFinal(turnEvents, "Internal step names were replaced with a readable summary.") || "Research completed.";
   }
 
   return content;
@@ -877,7 +877,7 @@ function normalizeAssistantContent(content: string | null, turnEvents: ResearchT
 function buildFallbackFinal(turnEvents: ResearchToolEvent[], note: string): string | undefined {
   const brief = getLatestBriefContent(turnEvents);
   if (brief) {
-    return `${brief}\n\n## 备注\n- ${note}`;
+    return `${brief}\n\n## Notes\n- ${note}`;
   }
 
   if (turnEvents.length === 0) {
@@ -889,18 +889,18 @@ function buildFallbackFinal(turnEvents: ResearchToolEvent[], note: string): stri
   const failed = turnEvents.filter((event) => event.status === "failed");
 
   return [
-    "# 调研简报（部分结果）",
+    "# Research brief (partial results)",
     "",
-    "## 当前进展",
-    `- 已整理候选资料：${sourceCount} 条。`,
-    `- 结构化发现：${extractFindingCount(findLatestOutput(turnEvents, "synthesize_evidence"))} 条。`,
+    "## Current progress",
+    `- Candidate sources: ${sourceCount}.`,
+    `- Structured findings: ${extractFindingCount(findLatestOutput(turnEvents, "synthesize_evidence"))}.`,
     "",
-    "## 可用结论",
-    recommendation || "当前证据不足，尚不能形成稳定建议。",
+    "## Available findings",
+    recommendation || "The current evidence is insufficient for a reliable recommendation.",
     "",
-    "## 限制说明",
+    "## Limitations",
     `- ${note}`,
-    ...failed.map((event) => `- ${event.stepLabel}失败：${event.error || "未知错误"}`)
+    ...failed.map((event) => `- ${event.stepLabel}Failed: ${event.error || "Unknown error"}`)
   ].join("\n");
 }
 
@@ -917,28 +917,28 @@ function isSourceCollectionBlockingFailure(event: ResearchToolEvent): boolean {
 function buildSourceCollectionFailureSummary(error: string): string {
   const suggestions: string[] = [];
   if (/Missing SEARCH_API_KEY/i.test(error)) {
-    suggestions.push("如果需要 web 资料，请在 apps/server/.env 中配置 SEARCH_API_KEY，并重启后端服务。");
+    suggestions.push("For web sources, configure SEARCH_API_KEY in apps/server/.env and restart the server.");
   }
   if (/Semantic Scholar rate limit exceeded|429/i.test(error)) {
-    suggestions.push("如果论文接口被限流，请配置 SEMANTIC_SCHOLAR_API_KEY，或稍后重试。");
+    suggestions.push("If the paper API is rate limited, configure SEMANTIC_SCHOLAR_API_KEY or try again later.");
   }
   if (/Unsupported SEARCH_PROVIDER/i.test(error)) {
-    suggestions.push("请把 SEARCH_PROVIDER 设置为 tavily、serpapi 或 bing。");
+    suggestions.push("Set SEARCH_PROVIDER to tavily, serpapi, or bing.");
   }
   if (suggestions.length === 0) {
-    suggestions.push("请检查外部资料 API 的返回格式、额度和网络连通性后重试。");
+    suggestions.push("Check the source API response format, quota, and network connection, then retry.");
   }
 
   return [
-    "# 调研暂时无法继续",
+    "# Research could not continue",
     "",
-    "## 原因",
-    `- 资料收集阶段失败：${error}`,
+    "## Reason",
+    `- Source collection failed: ${error}`,
     "",
-    "## 需要处理",
+    "## Action needed",
     ...suggestions.map((item) => `- ${item}`),
     "",
-    "我没有继续调用后续整理和写作工具，因为没有可靠的真实资料来源时不能生成调研简报。"
+    "The workflow stopped because a research brief requires reliable real sources."
   ].join("\n");
 }
 
@@ -1029,7 +1029,7 @@ function getLatestUserGoal(state: SessionState): string {
   return (
     [...state.uiMessages]
       .reverse()
-      .find((message) => message.role === "user" && !isManualCompactCommand(message.content))?.content || "继续当前调研任务"
+      .find((message) => message.role === "user" && !isManualCompactCommand(message.content))?.content || "Continue the current research task"
   );
 }
 
@@ -1044,7 +1044,7 @@ function isRequiredToolName(toolName: string): toolName is ChildTaskType {
 }
 
 function getStepLabel(toolName: string): string {
-  return isRequiredToolName(toolName) ? taskStepLabels[toolName] : "未知步骤";
+  return isRequiredToolName(toolName) ? taskStepLabels[toolName] : "Unknown step";
 }
 
 function inferTaskType(args: unknown): ChildTaskType | undefined {
@@ -1081,14 +1081,14 @@ function stableStringify(value: unknown): string {
 }
 
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : "未知错误";
+  return error instanceof Error ? error.message : "Unknown error";
 }
 
 function formatToolArgumentError(error: unknown): string {
   const message = formatError(error);
-  if (/task 参数无效/i.test(message)) {
-    return `任务参数不完整或格式不正确：${message.replace(/^task 参数无效：?/, "")}`;
+  if (/task Invalid arguments/i.test(message)) {
+    return `Task arguments are incomplete or invalid: ${message.replace(/^task Invalid arguments: ?/, "")}`;
   }
 
-  return `工具参数解析或上下文注入失败：${message}`;
+  return `Tool argument parsing or context injection failed: ${message}`;
 }

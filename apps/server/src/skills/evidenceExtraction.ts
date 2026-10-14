@@ -30,13 +30,13 @@ const METRICS = [
   "nDCG",
   "latency",
   "cost",
-  "忠实度",
-  "相关性",
-  "上下文",
-  "检索质量",
-  "生成质量"
+  "faithfulness",
+  "relevance",
+  "context",
+  "retrieval quality",
+  "generation quality"
 ];
-const LIMITATION_TERMS = ["limitation", "pitfall", "risk", "bias", "cost", "manual", "人工", "成本", "陷阱", "风险"];
+const LIMITATION_TERMS = ["limitation", "pitfall", "risk", "bias", "cost", "manual", "human review", "cost", "pitfall", "risk"];
 
 export function extractEvidenceFromSources(sources: ResearchSource[], plan?: ResearchPlan): EvidenceExtraction {
   const items = sources.map((source) => extractEvidenceItem(source, plan));
@@ -52,14 +52,14 @@ export function extractEvidenceFromSources(sources: ResearchSource[], plan?: Res
 export function summarizeEvidenceForModel(extraction: EvidenceExtraction): string {
   const topItems = extraction.items.slice(0, 5);
   return [
-    `evidence_extraction_skill 输出：已从 ${extraction.itemCount} 条资料中抽取证据线索。`,
-    `覆盖标签：${extraction.coveredAspectTags.join("、") || "暂未识别"}`,
+    `evidence_extraction_skill: extracted evidence hints from ${extraction.itemCount} sources.`,
+    `Coverage tags: ${extraction.coveredAspectTags.join(", ") || "Not identified"}`,
     ...topItems.map((item) =>
       [
-        `- 来源：${item.sourceTitle}`,
-        item.frameworks.length > 0 ? `  框架：${item.frameworks.join("、")}` : "",
-        item.metrics.length > 0 ? `  指标：${item.metrics.join("、")}` : "",
-        item.claims.length > 0 ? `  线索：${item.claims.join("；")}` : ""
+        `- Source: ${item.sourceTitle}`,
+        item.frameworks.length > 0 ? `  Frameworks: ${item.frameworks.join(", ")}` : "",
+        item.metrics.length > 0 ? `  Metrics: ${item.metrics.join(", ")}` : "",
+        item.claims.length > 0 ? `  Evidence hints: ${item.claims.join("; ")}` : ""
       ]
         .filter(Boolean)
         .join("\n")
@@ -96,19 +96,19 @@ function buildClaims(
   const claims: string[] = [];
 
   if (frameworks.length > 0) {
-    claims.push(`资料提到 ${frameworks.join("、")}，可用于框架对比。`);
+    claims.push(`The source mentions ${frameworks.join(", ")}; inspect it for framework comparison.`);
   }
   if (metrics.length > 0) {
-    claims.push(`资料包含 ${metrics.slice(0, 5).join("、")} 等评估指标线索。`);
+    claims.push(`Metric terms include ${metrics.slice(0, 5).join(", ")}.`);
   }
   if (limitations.length > 0) {
-    claims.push("资料涉及成本、风险或人工复核等限制因素。");
+    claims.push("The source discusses limitations such as cost, risk, or human review.");
   }
   if (aspectTags.length > 0) {
-    claims.push(`资料可支撑“${aspectTags.join("、")}”相关部分。`);
+    claims.push(`The source may inform these aspects: ${aspectTags.join(", ")}.`);
   }
   if (claims.length === 0) {
-    claims.push(`资料摘要可作为“${source.title}”的背景线索，但需要进一步核对原文。`);
+    claims.push(`The abstract provides background for "${source.title}"; verify the original text.`);
   }
 
   return claims;
@@ -118,26 +118,26 @@ function inferAspectTags(text: string, frameworks: string[], metrics: string[], 
   const normalized = text.toLowerCase();
   const tags: string[] = [];
 
-  if (/dimension|metric|指标|faithfulness|recall|precision|quality|质量/.test(normalized) || metrics.length > 0) {
-    tags.push("关键评估指标");
+  if (/dimension|metric|faithfulness|recall|precision|quality/.test(normalized) || metrics.length > 0) {
+    tags.push("Key evaluation metrics");
   }
-  if (/retrieval|context|检索|上下文/.test(normalized)) {
-    tags.push("核心评估维度");
+  if (/retrieval|context|context/.test(normalized)) {
+    tags.push("Core evaluation dimensions");
   }
-  if (frameworks.length > 0 || /framework|tool|平台|框架/.test(normalized)) {
-    tags.push("主流评估框架对比");
-    if (/memory|memgpt|letta|langgraph|zep|mem0|crewai|记忆/.test(normalized)) {
-      tags.push("主流记忆框架对比");
+  if (frameworks.length > 0 || /framework|tool/.test(normalized)) {
+    tags.push("Evaluation framework comparison");
+    if (/memory|memgpt|letta|langgraph|zep|mem0|crewai/.test(normalized)) {
+      tags.push("Memory framework comparison");
     }
   }
-  if (/memory|short-term|long-term|episodic|semantic|procedural|working memory|记忆|长期|短期|语义|事件|程序性/.test(normalized)) {
-    tags.push("记忆模型和核心概念");
+  if (/memory|short-term|long-term|episodic|semantic|procedural|working memory/.test(normalized)) {
+    tags.push("Memory models and core concepts");
   }
-  if (/dataset|benchmark|rgb|crud|kilt|natural questions|数据集|基准/.test(normalized)) {
-    tags.push("评估数据集和基准测试");
+  if (/dataset|benchmark|rgb|crud|kilt|natural questions/.test(normalized)) {
+    tags.push("Evaluation datasets and benchmarks");
   }
-  if (/practice|pitfall|production|best|落地|实践|陷阱|风险/.test(normalized)) {
-    tags.push("最佳实践和常见陷阱");
+  if (/practice|pitfall|production|best/.test(normalized)) {
+    tags.push("Best practices and common pitfalls");
   }
 
   if (plan) {

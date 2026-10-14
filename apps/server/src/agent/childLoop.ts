@@ -38,7 +38,7 @@ export async function runChildAgent(input: ChildAgentRunInput): Promise<ChildAge
         currentGoal: input.instruction,
         uiMessages: [],
         researchEvents: [],
-        nextAction: `执行 ${input.profile.stepLabel} 子任务。`
+        nextAction: `Execute the ${input.profile.stepLabel} subtask.`
       }) || messages;
     const assistantMessage = await createChatCompletion({
       messages,
@@ -48,19 +48,19 @@ export async function runChildAgent(input: ChildAgentRunInput): Promise<ChildAge
 
     const toolCalls = assistantMessage.tool_calls || [];
     if (toolCalls.length === 0) {
-      throw new Error(`${input.profile.stepLabel}子智能体没有调用必要工具。`);
+      throw new Error(`${input.profile.stepLabel} child agent did not call its required tool.`);
     }
 
     for (const toolCall of toolCalls) {
       const toolName = toolCall.function.name;
       if (toolName !== input.profile.toolName) {
-        throw new Error(`${input.profile.stepLabel}子智能体只能调用 ${input.profile.toolName}，不能调用 ${toolName}。`);
+        throw new Error(`${input.profile.stepLabel} child agent can call only ${input.profile.toolName}, not ${toolName}.`);
       }
 
       const parsedArgs = parseToolArguments(toolCall.function.arguments);
       const callKey = createToolCallKey(toolName, parsedArgs);
       if (executedToolCalls.has(callKey)) {
-        throw new Error(`${input.profile.stepLabel}子智能体重复调用了相同工具和参数。`);
+        throw new Error(`${input.profile.stepLabel} child agent repeated identical tool arguments.`);
       }
 
       executedToolCalls.add(callKey);
@@ -79,16 +79,16 @@ export async function runChildAgent(input: ChildAgentRunInput): Promise<ChildAge
     }
   }
 
-  throw new Error(`${input.profile.stepLabel}子智能体达到最大工具轮数，仍未产生可用结果。`);
+  throw new Error(`${input.profile.stepLabel} child agent reached the tool-round limit without a usable result.`);
 }
 
 function buildChildUserMessage(input: ChildAgentRunInput): string {
   const hasInjectedInput = input.injectedInput !== undefined;
   return [
-    `任务说明：${input.instruction}`,
+    `Task instruction: ${input.instruction}`,
     buildEnvironmentGuidance(input.profile),
-    hasInjectedInput ? "后端已经准备好上一步结构化结果，会在执行工具时自动注入；不要在工具参数中复制该结果。" : "",
-    `只调用 ${input.profile.toolName}，完成后返回工具结果。`
+    hasInjectedInput ? "The server injects the previous structured result when executing the tool. Do not copy it into the arguments." : "",
+    `Call only ${input.profile.toolName} and return its result.`
   ]
     .filter(Boolean)
     .join("\n");
@@ -101,8 +101,8 @@ function buildEnvironmentGuidance(profile: ChildAgentProfile): string {
 
   const hasSearchApiKey = Boolean(process.env.SEARCH_API_KEY?.trim());
   return hasSearchApiKey
-    ? "当前已配置 web 搜索 API key；可以按任务需要选择 web、papers 或二者组合。"
-    : "当前未配置 web 搜索 API key；除非用户明确要求 web 来源，否则 source_collector 应使用 sourceTypes: [\"papers\"]。";
+    ? "A web search API key is configured. Select web, papers, or both as needed."
+    : "No web search API key is configured. Use sourceTypes: [\"papers\"] unless the user explicitly requests web sources.";
 }
 
 function buildChildExecutionArgs(
@@ -118,7 +118,7 @@ function buildChildExecutionArgs(
 
   if (profile.taskType === "synthesize_evidence") {
     if (!injectedInput) {
-      throw new Error("整理证据需要先注入 sources。");
+      throw new Error("Synthesis requires injected sources.");
     }
 
     const focus = truncateToolString(getNonEmptyString(baseArgs.focus) || input.instruction, 200);
@@ -133,7 +133,7 @@ function buildChildExecutionArgs(
 
   if (profile.taskType === "write_brief") {
     if (!injectedInput) {
-      throw new Error("生成简报需要先注入 synthesis。");
+      throw new Error("Brief writing requires injected synthesis.");
     }
 
     return {
@@ -169,7 +169,7 @@ function mergeCollectionTopic(requestedTopic: unknown, defaultTopic: unknown): s
   const requested = getNonEmptyString(requestedTopic);
   const fallback = getNonEmptyString(defaultTopic);
   if (!requested) {
-    return truncateToolString(fallback || "调研主题", 200);
+    return truncateToolString(fallback || "Research topic", 200);
   }
 
   if (!fallback || requested.toLowerCase().includes(fallback.toLowerCase())) {

@@ -22,6 +22,7 @@ export interface ResearchComparison {
 }
 
 export interface ResearchSynthesis {
+  references?: Array<{ title: string; url: string }>;
   focus: string;
   researchQuestion?: string;
   decisionContext?: string;
